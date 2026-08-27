@@ -17,7 +17,7 @@ class ClickEngine:
         self.update_callback = update_callback  # Atualiza a interface
         
         # Configurações padrão
-        self.cps = 10
+        self.cps = 12
         self.humanized = False
         self.master_enabled = True # Permite ligar/desligar todo o sistema
         
@@ -222,11 +222,11 @@ class AutoClickerApp(ctk.CTk):
         card1 = ctk.CTkFrame(parent, corner_radius=15)
         card1.pack(padx=10, pady=10, fill="x")
         
-        self.lbl_cps_ref = ctk.CTkLabel(card1, text="Velocidade (CPS): 10", font=ctk.CTkFont(weight="bold"))
+        self.lbl_cps_ref = ctk.CTkLabel(card1, text="Velocidade (CPS): 12", font=ctk.CTkFont(weight="bold"))
         self.lbl_cps_ref.pack(pady=(15, 5), padx=20, anchor="w")
-        
+
         self.slider_cps = ctk.CTkSlider(card1, from_=1, to=100, number_of_steps=99, command=self.on_cps_change)
-        self.slider_cps.set(10)
+        self.slider_cps.set(12)
         self.slider_cps.pack(padx=20, pady=10, fill="x")
         
         self.switch_humanized = ctk.CTkSwitch(card1, text="Modo Humanizado (Aleatoriedade)", command=self.on_humanized_toggle)

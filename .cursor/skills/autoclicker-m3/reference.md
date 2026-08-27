@@ -116,7 +116,7 @@ Janela: **500×750**, não redimensionável, tema escuro.
 
 | Controle | Descrição | Padrão |
 |----------|-----------|--------|
-| Slider CPS | 1–100 CPS | 10 |
+| Slider CPS | 1–100 CPS | 12 |
 | Modo humanizado | Intervalo 70%–130% do base | Off |
 | Botão Esquerdo | Gatilho | On |
 | Direito / Meio / X1 / X2 | Gatilho | Off |
