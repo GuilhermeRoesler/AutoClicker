@@ -1,0 +1,14 @@
+---
+description: Contexto do Auto Clicker M3 — aponta para a skill do projeto
+alwaysApply: true
+---
+
+# Auto Clicker M3
+
+Antes de alterar comportamento, arquitetura, UI, build ou release, leia a skill do projeto:
+
+`.cursor/skills/autoclicker-m3/SKILL.md`
+
+(Detalhes em `reference.md` na mesma pasta.)
+
+Preserve o modelo **duplo-clique + hold** e o anti-feedback de cliques injetados, salvo pedido explícito em contrário.
