@@ -17,6 +17,7 @@
 
 #include <windows.h>
 #include <windowsx.h>
+#include <objidl.h>
 #include <gdiplus.h>
 
 #include "resource.h"
