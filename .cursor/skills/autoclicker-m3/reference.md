@@ -18,6 +18,8 @@ O comportamento central **não** é clicar por atalho de teclado nem em coordena
 
 ## 2. Stack tecnológica
 
+### Primária (Python)
+
 | Item | Detalhe |
 |------|---------|
 | Linguagem | Python 3 (CI usa 3.12) |
@@ -28,29 +30,44 @@ O comportamento central **não** é clicar por atalho de teclado nem em coordena
 
 Dependências (`requirements.txt`): `pyinstaller`, `pynput`, `customtkinter`.
 
+### Secundária (C++)
+
+| Item | Detalhe |
+|------|---------|
+| Linguagem | C++17 |
+| Interface | Win32 API (tema escuro simples) |
+| Mouse (leitura) | `SetWindowsHookEx(WH_MOUSE_LL)` |
+| Mouse (injeção) | `SendInput` |
+| Build | CMake → `AutoClickerM3Cpp.exe` |
+| Dependências | Nenhuma de terceiros (só libs do Windows) |
+
 ---
 
 ## 3. Estrutura do repositório
 
 ```
 AutoClicker/
-├── main.py                         # Aplicação completa (motor + UI)
+├── main.py                         # Versão Python (primária)
 ├── build.py                        # Script de build PyInstaller
 ├── requirements.txt
+├── cpp/
+│   ├── main.cpp                    # Versão C++ (secundária)
+│   └── CMakeLists.txt
 ├── .cursor/skills/autoclicker-m3/  # Skill do agente
 ├── .cursor/rules/                  # Rules do projeto
 ├── .github/workflows/release.yml
-├── dist/                           # Saída do build (não versionado)
-└── build/                          # Cache do PyInstaller (não versionado)
+├── dist/                           # Saída do build Python (não versionado)
+├── build/                          # Cache do PyInstaller (não versionado)
+└── cpp/build/                      # Cache CMake (não versionado)
 ```
 
-Classes em `main.py`:
+Classes em `main.py` / equivalentes em `cpp/main.cpp`:
 
 | Classe | Responsabilidade |
 |--------|------------------|
 | `ClickEngine` | Listener global do mouse, loop de cliques, cálculo de CPS real |
 | `OverlayWindow` | HUD flutuante com CPS em tempo real |
-| `AutoClickerApp` | Janela principal (CustomTkinter) |
+| `AutoClickerApp` / `App` | Janela principal |
 
 ---
 
@@ -173,7 +190,7 @@ Tudo em memória. Hardcoded: tema Dark+blue, threshold 0.3 s, janela 500×750, o
 
 ## 9. Executar e compilar
 
-### Desenvolvimento
+### Python — desenvolvimento
 
 ```powershell
 python -m venv venv
@@ -182,7 +199,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### Build
+### Python — build
 
 ```powershell
 python build.py
@@ -191,9 +208,17 @@ python build.py
 
 Flags: `--onefile`, `--windowed`, `--name=AutoClickerM3`, `--collect-all=customtkinter`, `--noconfirm`.
 
+### C++ — build (MinGW)
+
+```powershell
+cmake -S cpp -B cpp/build -G "MinGW Makefiles"
+cmake --build cpp/build
+# → cpp/build/bin/AutoClickerM3Cpp.exe
+```
+
 ### Release (CI)
 
-`.github/workflows/release.yml` — tag `v*` ou `workflow_dispatch`; `windows-latest`, Python 3.12; publica o `.exe`.
+`.github/workflows/release.yml` — tag `v*` ou `workflow_dispatch`; `windows-latest`, Python 3.12; publica o `.exe` **Python**. A versão C++ ainda não entra no release automatizado.
 
 ---
 

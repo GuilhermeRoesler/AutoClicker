@@ -46,9 +46,20 @@ O arquivo sai em `dist/AutoClickerM3.exe`.
 
 Releases prontas também estão disponíveis na [página de Releases](https://github.com/GuilhermeRoesler/AutoClicker/releases) do GitHub.
 
+## Versão C++ (secundária)
+
+Há uma implementação paralela em `cpp/` (Win32, sem dependências externas), com o mesmo modelo de duplo-clique + hold.
+
+```powershell
+cmake -S cpp -B cpp/build -G "MinGW Makefiles"
+cmake --build cpp/build
+.\cpp\build\bin\AutoClickerM3Cpp.exe
+```
+
 ## Stack
 
-- Python · CustomTkinter · pynput · PyInstaller
+- **Primária:** Python · CustomTkinter · pynput · PyInstaller
+- **Secundária:** C++17 · Win32 · CMake
 
 ## Licença
 
