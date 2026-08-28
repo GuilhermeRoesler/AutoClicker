@@ -35,7 +35,7 @@ Dependências (`python/requirements.txt`): `pyinstaller`, `pynput`, `customtkint
 | Item | Detalhe |
 |------|---------|
 | Linguagem | C++17 |
-| Interface | Win32 API (tema escuro simples) |
+| Interface | Win32 + GDI+ (tema escuro custom, cards/switches/slider) |
 | Mouse (leitura) | `SetWindowsHookEx(WH_MOUSE_LL)` |
 | Mouse (injeção) | `SendInput` |
 | Build | CMake → `AutoClickerM3Cpp.exe` |

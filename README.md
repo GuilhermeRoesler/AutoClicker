@@ -88,7 +88,7 @@ cmake --build cpp/build
 ## Stack
 
 - **Primária:** Python · CustomTkinter · pynput · PyInstaller
-- **Secundária:** C++17 · Win32 · CMake
+- **Secundária:** C++17 · Win32 + GDI+ · CMake
 
 ## Licença
 

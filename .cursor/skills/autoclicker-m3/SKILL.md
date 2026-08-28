@@ -24,7 +24,7 @@ Two implementations at the same hierarchy level:
 | Path | Role |
 |------|------|
 | `python/main.py` | **Primary** — Python / CustomTkinter / pynput |
-| `cpp/main.cpp` | **Secondary** — C++ / Win32 / `WH_MOUSE_LL` + `SendInput` |
+| `cpp/main.cpp` | **Secondary** — C++ / Win32+GDI+ / `WH_MOUSE_LL` + `SendInput` |
 
 ### Python (`python/main.py`)
 
@@ -38,7 +38,7 @@ Threads: pynput `Listener`, daemon `_click_loop`, Tk mainloop. UI updates from e
 
 ### C++ (`cpp/main.cpp`)
 
-Same roles in one translation unit: `ClickEngine` (LL hook + click thread), `OverlayWindow`, Win32 `App` UI. Status updates via `PostMessage(WM_APP+1)`.
+Same roles in one translation unit: `ClickEngine` (LL hook + click thread), `OverlayWindow`, custom GDI+ `App` UI (rounded cards, switches, slider). Status updates via `PostMessage(WM_APP+1)`.
 
 ## Invariants (do not break)
 
@@ -53,7 +53,7 @@ Same roles in one translation unit: `ClickEngine` (LL hook + click thread), `Ove
 - **Primary:** Python 3.12 (CI), `customtkinter` + `tkinter`, `pynput`
   - Build: `cd python && python build.py` → `python/dist/AutoClickerM3.exe` (PyInstaller onefile, windowed)
   - Release: `.github/workflows/release.yml` on tag `v*` or manual dispatch
-- **Secondary:** C++17, Win32 API (no third-party deps)
+- **Secondary:** C++17, Win32 + GDI+ (no third-party deps)
   - Build: `cmake -S cpp -B cpp/build -G "MinGW Makefiles"` then `cmake --build cpp/build`
   - Output: `cpp/build/bin/AutoClickerM3Cpp.exe`
   - Run: root `run.bat` / `run.sh` → Python; `python/run.*` and `cpp/run.*` for each stack
