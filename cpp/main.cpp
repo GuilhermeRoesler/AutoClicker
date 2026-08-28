@@ -1,17 +1,16 @@
 /**
- * Auto Clicker M3 Pro — versão C++ (secundária)
+ * Auto Clicker M3 Pro — C++ / MSVC / WebView2
  *
- * Espelha o modelo do main.py:
+ * Modelo (igual ao Python):
  *   1) Duplo-clique físico (< 300 ms) em botão habilitado
- *   2) Manter pressionado → injeta cliques na CPS configurada
+ *   2) Manter pressionado → injeta cliques na CPS
  *   3) Soltar → para imediatamente
  *
- * Anti-feedback: ignore_next_press / ignore_next_release por botão,
- * setados ANTES de cada SendInput.
+ * Anti-feedback: ignore_next_press / ignore_next_release antes de SendInput.
  *
- * Build (MinGW):
- *   cmake -S cpp -B cpp/build -G "MinGW Makefiles"
- *   cmake --build cpp/build
+ * Build:
+ *   cmake -S cpp -B cpp/build -G "Visual Studio 18 2026" -A x64
+ *   cmake --build cpp/build --config Release
  */
 
 #ifndef UNICODE
@@ -22,30 +21,33 @@
 #endif
 
 #include <windows.h>
-#include <commctrl.h>
-#include <windowsx.h>
+#include <mmsystem.h>
+#include <wrl.h>
 
-#include <algorithm>
+#include <WebView2.h>
+
 #include <atomic>
+#include <algorithm>
 #include <chrono>
-#include <cmath>
-#include <cstdint>
 #include <deque>
 #include <mutex>
 #include <random>
 #include <string>
 #include <thread>
-#include <vector>
 
-#ifdef _MSC_VER
-#pragma comment(lib, "comctl32.lib")
-#pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "user32.lib")
+#pragma comment(lib, "gdi32.lib")
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "shlwapi.lib")
+#pragma comment(lib, "version.lib")
 #pragma comment(lib, "winmm.lib")
-#endif
+
+using Microsoft::WRL::Callback;
+using Microsoft::WRL::ComPtr;
 
 // ---------------------------------------------------------------------------
-// Constantes / IDs
+// Tipos
 // ---------------------------------------------------------------------------
 
 enum MouseBtn : int {
@@ -59,25 +61,11 @@ enum MouseBtn : int {
 
 static constexpr double kDoubleClickThreshold = 0.3;
 static constexpr UINT_PTR kTimerOverlay = 1;
-static constexpr UINT_PTR kTimerRipple = 2;
+static constexpr UINT WM_APP_STATUS = WM_APP + 1;
+static constexpr UINT WM_APP_WEBMSG = WM_APP + 2;
 
-static constexpr int IDC_MASTER = 1001;
-static constexpr int IDC_CPS_SLIDER = 1002;
-static constexpr int IDC_CPS_LABEL = 1003;
-static constexpr int IDC_HUMANIZED = 1004;
-static constexpr int IDC_TRIGGER_BASE = 1010;  // +0..4
-static constexpr int IDC_OVERLAY = 1020;
-static constexpr int IDC_STATUS = 1030;
-static constexpr int IDC_TABS = 1040;
-static constexpr int IDC_TEST_HINT = 1050;
-
-static constexpr COLORREF kBg = RGB(30, 30, 30);
-static constexpr COLORREF kCard = RGB(45, 45, 45);
-static constexpr COLORREF kText = RGB(230, 230, 230);
 static constexpr COLORREF kGreen = RGB(0, 230, 118);
-static constexpr COLORREF kRed = RGB(239, 83, 80);
 static constexpr COLORREF kGray = RGB(158, 158, 158);
-static constexpr COLORREF kCanvasBg = RGB(18, 18, 18);
 
 // ---------------------------------------------------------------------------
 // Util
@@ -107,6 +95,73 @@ static double RandUniform(double a, double b) {
 static void SleepSec(double seconds) {
     if (seconds <= 0.0) return;
     Sleep(static_cast<DWORD>(seconds * 1000.0));
+}
+
+static std::wstring Widen(const std::string& s) {
+    if (s.empty()) return {};
+    const int n = MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0);
+    std::wstring out(n, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), out.data(), n);
+    return out;
+}
+
+static std::string Narrow(const std::wstring& s) {
+    if (s.empty()) return {};
+    const int n = WideCharToMultiByte(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0, nullptr, nullptr);
+    std::string out(n, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), out.data(), n, nullptr, nullptr);
+    return out;
+}
+
+static bool JsonGetBool(const std::string& json, const char* key, bool fallback = false) {
+    const std::string needle = std::string("\"") + key + "\"";
+    const auto pos = json.find(needle);
+    if (pos == std::string::npos) return fallback;
+    const auto colon = json.find(':', pos + needle.size());
+    if (colon == std::string::npos) return fallback;
+    const auto t = json.find("true", colon);
+    const auto f = json.find("false", colon);
+    if (t != std::string::npos && (f == std::string::npos || t < f)) return true;
+    if (f != std::string::npos) return false;
+    return fallback;
+}
+
+static int JsonGetInt(const std::string& json, const char* key, int fallback = 0) {
+    const std::string needle = std::string("\"") + key + "\"";
+    const auto pos = json.find(needle);
+    if (pos == std::string::npos) return fallback;
+    const auto colon = json.find(':', pos + needle.size());
+    if (colon == std::string::npos) return fallback;
+    try {
+        return std::stoi(json.substr(colon + 1));
+    } catch (...) {
+        return fallback;
+    }
+}
+
+static std::string JsonGetString(const std::string& json, const char* key) {
+    const std::string needle = std::string("\"") + key + "\"";
+    const auto pos = json.find(needle);
+    if (pos == std::string::npos) return {};
+    const auto colon = json.find(':', pos + needle.size());
+    if (colon == std::string::npos) return {};
+    const auto q1 = json.find('"', colon + 1);
+    if (q1 == std::string::npos) return {};
+    const auto q2 = json.find('"', q1 + 1);
+    if (q2 == std::string::npos) return {};
+    return json.substr(q1 + 1, q2 - q1 - 1);
+}
+
+static std::wstring ExeDir() {
+    wchar_t path[MAX_PATH]{};
+    GetModuleFileNameW(nullptr, path, MAX_PATH);
+    std::wstring full(path);
+    const auto slash = full.find_last_of(L"\\/");
+    return slash == std::wstring::npos ? L"." : full.substr(0, slash);
+}
+
+static std::wstring UiIndexPath() {
+    return ExeDir() + L"\\ui\\index.html";
 }
 
 // ---------------------------------------------------------------------------
@@ -172,20 +227,17 @@ struct ClickEngine {
     }
 
     void NotifyUi() {
-        if (hwnd_ui) PostMessageW(hwnd_ui, WM_APP + 1, 0, 0);
+        if (hwnd_ui) PostMessageW(hwnd_ui, WM_APP_STATUS, 0, 0);
     }
 
     static int ButtonFromMsg(WPARAM wParam, const MSLLHOOKSTRUCT* info) {
         switch (wParam) {
             case WM_LBUTTONDOWN:
-            case WM_LBUTTONUP:
-                return BTN_LEFT;
+            case WM_LBUTTONUP: return BTN_LEFT;
             case WM_RBUTTONDOWN:
-            case WM_RBUTTONUP:
-                return BTN_RIGHT;
+            case WM_RBUTTONUP: return BTN_RIGHT;
             case WM_MBUTTONDOWN:
-            case WM_MBUTTONUP:
-                return BTN_MIDDLE;
+            case WM_MBUTTONUP: return BTN_MIDDLE;
             case WM_XBUTTONDOWN:
             case WM_XBUTTONUP: {
                 const WORD xb = HIWORD(info->mouseData);
@@ -193,8 +245,7 @@ struct ClickEngine {
                 if (xb == XBUTTON2) return BTN_X2;
                 return -1;
             }
-            default:
-                return -1;
+            default: return -1;
         }
     }
 
@@ -208,7 +259,7 @@ struct ClickEngine {
             case BTN_LEFT: return MOUSEEVENTF_LEFTDOWN;
             case BTN_RIGHT: return MOUSEEVENTF_RIGHTDOWN;
             case BTN_MIDDLE: return MOUSEEVENTF_MIDDLEDOWN;
-            case BTN_X1: return MOUSEEVENTF_XDOWN;
+            case BTN_X1:
             case BTN_X2: return MOUSEEVENTF_XDOWN;
             default: return 0;
         }
@@ -219,7 +270,7 @@ struct ClickEngine {
             case BTN_LEFT: return MOUSEEVENTF_LEFTUP;
             case BTN_RIGHT: return MOUSEEVENTF_RIGHTUP;
             case BTN_MIDDLE: return MOUSEEVENTF_MIDDLEUP;
-            case BTN_X1: return MOUSEEVENTF_XUP;
+            case BTN_X1:
             case BTN_X2: return MOUSEEVENTF_XUP;
             default: return 0;
         }
@@ -256,14 +307,11 @@ struct ClickEngine {
 
             bool clicked_any = false;
             for (int btn = 0; btn < BTN_COUNT; ++btn) {
-                if (!clicking_state[btn].load()) continue;
-                if (!active_triggers[btn]) continue;
+                if (!clicking_state[btn].load() || !active_triggers[btn]) continue;
 
                 ignore_next_press[btn] = true;
                 InjectPress(btn);
-
                 SleepSec(RandUniform(0.01, 0.02));
-
                 ignore_next_release[btn] = true;
                 InjectRelease(btn);
 
@@ -276,11 +324,9 @@ struct ClickEngine {
             }
 
             if (clicked_any) {
-                const double base = 1.0 / std::max(1, cps.load());
-                double sleep_time = humanized.load()
-                    ? RandUniform(base * 0.7, base * 1.3)
-                    : base;
-                SleepSec(std::max(0.001, sleep_time - 0.025));
+                const double base = 1.0 / (std::max)(1, cps.load());
+                double sleep_time = humanized.load() ? RandUniform(base * 0.7, base * 1.3) : base;
+                SleepSec((std::max)(0.001, sleep_time - 0.025));
             } else {
                 SleepSec(0.01);
             }
@@ -288,13 +334,11 @@ struct ClickEngine {
     }
 
     void OnPhysical(int btn, bool pressed) {
-        if (!master_enabled.load()) return;
-        if (btn < 0 || btn >= BTN_COUNT) return;
+        if (!master_enabled.load() || btn < 0 || btn >= BTN_COUNT) return;
         if (!active_triggers[btn]) return;
 
         if (pressed) {
             if (ignore_next_press[btn].exchange(false)) return;
-
             const double now = NowSec();
             if (now - last_click_time[btn] < kDoubleClickThreshold) {
                 if (!clicking_state[btn].load()) {
@@ -305,7 +349,6 @@ struct ClickEngine {
             last_click_time[btn] = now;
         } else {
             if (ignore_next_release[btn].exchange(false)) return;
-
             if (clicking_state[btn].load()) {
                 clicking_state[btn] = false;
                 NotifyUi();
@@ -322,9 +365,7 @@ LRESULT CALLBACK ClickEngine::LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM
     if (nCode == HC_ACTION) {
         const auto* info = reinterpret_cast<MSLLHOOKSTRUCT*>(lParam);
         const int btn = ButtonFromMsg(wParam, info);
-        if (btn >= 0) {
-            g_engine.OnPhysical(btn, IsPressMsg(wParam));
-        }
+        if (btn >= 0) g_engine.OnPhysical(btn, IsPressMsg(wParam));
     }
     return CallNextHookEx(nullptr, nCode, wParam, lParam);
 }
@@ -336,6 +377,8 @@ LRESULT CALLBACK ClickEngine::LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM
 struct OverlayWindow {
     HWND hwnd = nullptr;
     HFONT font = nullptr;
+    std::wstring text_ = L"CPS: 0";
+    COLORREF color_ = kGreen;
 
     bool Create(HINSTANCE inst) {
         WNDCLASSW wc{};
@@ -345,38 +388,26 @@ struct OverlayWindow {
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         RegisterClassW(&wc);
 
-        const int x = GetSystemMetrics(SM_CXSCREEN) - 250;
-        const int y = 50;
-
         hwnd = CreateWindowExW(
             WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_TRANSPARENT,
-            L"ACM3Overlay", L"",
-            WS_POPUP,
-            x, y, 220, 70,
+            L"ACM3Overlay", L"", WS_POPUP,
+            GetSystemMetrics(SM_CXSCREEN) - 250, 50, 220, 70,
             nullptr, nullptr, inst, this);
 
         SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 0, LWA_COLORKEY);
         font = CreateFontW(36, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-                           DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                           CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+                           DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, FF_SWISS, L"Segoe UI");
         ShowWindow(hwnd, SW_HIDE);
         return hwnd != nullptr;
     }
 
     void Destroy() {
-        if (font) {
-            DeleteObject(font);
-            font = nullptr;
-        }
-        if (hwnd) {
-            DestroyWindow(hwnd);
-            hwnd = nullptr;
-        }
+        if (font) { DeleteObject(font); font = nullptr; }
+        if (hwnd) { DestroyWindow(hwnd); hwnd = nullptr; }
     }
 
     void Show(bool visible) {
-        if (!hwnd) return;
-        ShowWindow(hwnd, visible ? SW_SHOWNOACTIVATE : SW_HIDE);
+        if (hwnd) ShowWindow(hwnd, visible ? SW_SHOWNOACTIVATE : SW_HIDE);
     }
 
     void SetText(const std::wstring& text, COLORREF color) {
@@ -398,7 +429,7 @@ struct OverlayWindow {
         if (msg == WM_PAINT && self) {
             PAINTSTRUCT ps;
             HDC hdc = BeginPaint(hwnd, &ps);
-            RECT rc;
+            RECT rc{};
             GetClientRect(hwnd, &rc);
             FillRect(hdc, &rc, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
             SetBkMode(hdc, TRANSPARENT);
@@ -411,79 +442,36 @@ struct OverlayWindow {
         }
         return DefWindowProcW(hwnd, msg, wParam, lParam);
     }
-
-private:
-    std::wstring text_ = L"CPS: 0";
-    COLORREF color_ = kGreen;
 };
 
 // ---------------------------------------------------------------------------
-// Ripple
-// ---------------------------------------------------------------------------
-
-struct Ripple {
-    int x = 0, y = 0;
-    int radius = 5;
-    COLORREF color = kGreen;
-};
-
-// ---------------------------------------------------------------------------
-// App UI
+// App (WebView2 host)
 // ---------------------------------------------------------------------------
 
 struct App {
     HINSTANCE inst = nullptr;
     HWND hwnd = nullptr;
-    HWND tabs = nullptr;
-    HWND status = nullptr;
-    HWND cps_label = nullptr;
-    HWND cps_slider = nullptr;
-    HWND canvas = nullptr;
-    HWND page_config = nullptr;
-    HWND page_test = nullptr;
     OverlayWindow overlay;
-
-    HFONT font_title = nullptr;
-    HFONT font_ui = nullptr;
-    HFONT font_status = nullptr;
-    HBRUSH brush_bg = nullptr;
-    HBRUSH brush_card = nullptr;
-    HBRUSH brush_canvas = nullptr;
-
     bool overlay_on = false;
-    std::vector<Ripple> ripples;
-    static constexpr COLORREF kRippleColors[5] = {
-        RGB(0, 230, 118), RGB(41, 182, 246), RGB(224, 64, 251),
-        RGB(255, 87, 34), RGB(255, 235, 59)
-    };
+
+    ComPtr<ICoreWebView2Controller> controller;
+    ComPtr<ICoreWebView2> webview;
 
     bool Create(HINSTANCE hInstance) {
         inst = hInstance;
-        INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_BAR_CLASSES | ICC_TAB_CLASSES | ICC_STANDARD_CLASSES};
-        InitCommonControlsEx(&icc);
-
-        brush_bg = CreateSolidBrush(kBg);
-        brush_card = CreateSolidBrush(kCard);
-        brush_canvas = CreateSolidBrush(kCanvasBg);
-        font_title = CreateFontW(26, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-                                 DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, FF_SWISS, L"Segoe UI");
-        font_ui = CreateFontW(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                              DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, FF_SWISS, L"Segoe UI");
-        font_status = CreateFontW(18, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-                                  DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, FF_SWISS, L"Segoe UI");
 
         WNDCLASSW wc{};
         wc.lpfnWndProc = &App::WndProc;
         wc.hInstance = inst;
-        wc.lpszClassName = L"ACM3Main";
-        wc.hbrBackground = brush_bg;
+        wc.lpszClassName = L"ACM3WebHost";
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+        wc.hbrBackground = reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
         RegisterClassW(&wc);
 
         hwnd = CreateWindowExW(
-            0, L"ACM3Main", L"Auto Clicker M3 Pro (C++)",
+            0, L"ACM3WebHost", L"Auto Clicker M3 Pro",
             WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-            CW_USEDEFAULT, CW_USEDEFAULT, 516, 790,
+            CW_USEDEFAULT, CW_USEDEFAULT, 520, 780,
             nullptr, nullptr, inst, this);
 
         if (!hwnd) return false;
@@ -491,7 +479,7 @@ struct App {
         overlay.Create(inst);
         g_engine.Start(hwnd);
         SetTimer(hwnd, kTimerOverlay, 100, nullptr);
-        SetTimer(hwnd, kTimerRipple, 20, nullptr);
+        InitWebView();
 
         ShowWindow(hwnd, SW_SHOW);
         UpdateWindow(hwnd);
@@ -500,147 +488,91 @@ struct App {
 
     void Destroy() {
         KillTimer(hwnd, kTimerOverlay);
-        KillTimer(hwnd, kTimerRipple);
         g_engine.Stop();
         overlay.Destroy();
-        if (font_title) DeleteObject(font_title);
-        if (font_ui) DeleteObject(font_ui);
-        if (font_status) DeleteObject(font_status);
-        if (brush_bg) DeleteObject(brush_bg);
-        if (brush_card) DeleteObject(brush_card);
-        if (brush_canvas) DeleteObject(brush_canvas);
+        webview = nullptr;
+        controller = nullptr;
     }
 
-    void BuildChildren() {
-        // Header title
-        HWND title = CreateWindowW(L"STATIC", L"Auto Clicker",
-                                   WS_CHILD | WS_VISIBLE | SS_LEFT,
-                                   20, 18, 260, 36, hwnd, nullptr, inst, nullptr);
-        SendMessageW(title, WM_SETFONT, reinterpret_cast<WPARAM>(font_title), TRUE);
+    void InitWebView() {
+        const std::wstring userData = ExeDir() + L"\\webview2-data";
+        CreateDirectoryW(userData.c_str(), nullptr);
 
-        HWND master = CreateWindowW(L"BUTTON", L"LIGADO",
-                                    WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                                    360, 22, 120, 28, hwnd, reinterpret_cast<HMENU>(IDC_MASTER), inst, nullptr);
-        SendMessageW(master, WM_SETFONT, reinterpret_cast<WPARAM>(font_ui), TRUE);
-        SendMessageW(master, BM_SETCHECK, BST_CHECKED, 0);
+        CreateCoreWebView2EnvironmentWithOptions(
+            nullptr, userData.c_str(), nullptr,
+            Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
+                [this](HRESULT result, ICoreWebView2Environment* env) -> HRESULT {
+                    if (FAILED(result) || !env) {
+                        MessageBoxW(hwnd,
+                            L"Falha ao criar o ambiente WebView2.\n"
+                            L"Instale o Microsoft Edge WebView2 Runtime.",
+                            L"Auto Clicker M3 Pro", MB_ICONERROR);
+                        return result;
+                    }
+                    return env->CreateCoreWebView2Controller(
+                        hwnd,
+                        Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
+                            [this](HRESULT result, ICoreWebView2Controller* ctrl) -> HRESULT {
+                                if (FAILED(result) || !ctrl) return result;
+                                controller = ctrl;
+                                controller->get_CoreWebView2(&webview);
+                                ResizeWebView();
 
-        tabs = CreateWindowW(WC_TABCONTROLW, L"",
-                             WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
-                             20, 60, 460, 620, hwnd, reinterpret_cast<HMENU>(IDC_TABS), inst, nullptr);
-        SendMessageW(tabs, WM_SETFONT, reinterpret_cast<WPARAM>(font_ui), TRUE);
+                                ComPtr<ICoreWebView2Settings> settings;
+                                webview->get_Settings(&settings);
+                                if (settings) {
+                                    settings->put_AreDevToolsEnabled(FALSE);
+                                    settings->put_AreDefaultContextMenusEnabled(FALSE);
+                                    settings->put_IsStatusBarEnabled(FALSE);
+                                }
 
-        TCITEMW item{};
-        item.mask = TCIF_TEXT;
-        item.pszText = const_cast<wchar_t*>(L"Configurações");
-        TabCtrl_InsertItem(tabs, 0, &item);
-        item.pszText = const_cast<wchar_t*>(L"Teste (Ripples)");
-        TabCtrl_InsertItem(tabs, 1, &item);
+                                webview->add_WebMessageReceived(
+                                    Callback<ICoreWebView2WebMessageReceivedEventHandler>(
+                                        [this](ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
+                                            LPWSTR raw = nullptr;
+                                            if (SUCCEEDED(args->TryGetWebMessageAsString(&raw)) && raw) {
+                                                std::wstring msg(raw);
+                                                CoTaskMemFree(raw);
+                                                auto* heap = new std::wstring(std::move(msg));
+                                                PostMessageW(hwnd, WM_APP_WEBMSG, 0, reinterpret_cast<LPARAM>(heap));
+                                            }
+                                            return S_OK;
+                                        }).Get(),
+                                    nullptr);
 
-        RECT tr{};
-        GetClientRect(tabs, &tr);
-        TabCtrl_AdjustRect(tabs, FALSE, &tr);
-        MapWindowPoints(tabs, hwnd, reinterpret_cast<LPPOINT>(&tr), 2);
-
-        page_config = CreateWindowW(L"STATIC", L"",
-                                    WS_CHILD | WS_VISIBLE,
-                                    tr.left, tr.top, tr.right - tr.left, tr.bottom - tr.top,
-                                    hwnd, nullptr, inst, nullptr);
-
-        page_test = CreateWindowW(L"STATIC", L"",
-                                  WS_CHILD,
-                                  tr.left, tr.top, tr.right - tr.left, tr.bottom - tr.top,
-                                  hwnd, nullptr, inst, nullptr);
-
-        BuildConfigPage(page_config, tr.right - tr.left, tr.bottom - tr.top);
-        BuildTestPage(page_test, tr.right - tr.left, tr.bottom - tr.top);
-
-        status = CreateWindowW(L"STATIC", L"Status: INATIVO",
-                               WS_CHILD | WS_VISIBLE | SS_CENTER,
-                               20, 695, 460, 30, hwnd, reinterpret_cast<HMENU>(IDC_STATUS), inst, nullptr);
-        SendMessageW(status, WM_SETFONT, reinterpret_cast<WPARAM>(font_status), TRUE);
+                                const std::wstring index = UiIndexPath();
+                                if (GetFileAttributesW(index.c_str()) == INVALID_FILE_ATTRIBUTES) {
+                                    MessageBoxW(hwnd,
+                                        L"UI nao encontrada (ui/index.html ao lado do .exe).",
+                                        L"Auto Clicker M3 Pro", MB_ICONERROR);
+                                    return S_OK;
+                                }
+                                const std::wstring uri = L"file:///" + index;
+                                std::wstring fixed = uri;
+                                for (auto& ch : fixed) if (ch == L'\\') ch = L'/';
+                                webview->Navigate(fixed.c_str());
+                                return S_OK;
+                            }).Get());
+                }).Get());
     }
 
-    void BuildConfigPage(HWND parent, int /*w*/, int /*h*/) {
-        auto addLabel = [&](const wchar_t* text, int x, int y, int ww, int hh, int id = 0) {
-            HWND h = CreateWindowW(L"STATIC", text, WS_CHILD | WS_VISIBLE | SS_LEFT,
-                                   x, y, ww, hh, parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), inst, nullptr);
-            SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(font_ui), TRUE);
-            return h;
-        };
-
-        cps_label = addLabel(L"Velocidade (CPS): 12", 16, 16, 400, 24, IDC_CPS_LABEL);
-
-        cps_slider = CreateWindowW(TRACKBAR_CLASSW, L"",
-                                   WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS | TBS_HORZ,
-                                   16, 48, 400, 36, parent, reinterpret_cast<HMENU>(IDC_CPS_SLIDER), inst, nullptr);
-        SendMessageW(cps_slider, TBM_SETRANGEMIN, TRUE, 1);
-        SendMessageW(cps_slider, TBM_SETRANGEMAX, TRUE, 100);
-        SendMessageW(cps_slider, TBM_SETPOS, TRUE, 12);
-        SendMessageW(cps_slider, TBM_SETTICFREQ, 10, 0);
-
-        HWND human = CreateWindowW(L"BUTTON", L"Modo Humanizado (Aleatoriedade)",
-                                   WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                                   16, 100, 400, 28, parent, reinterpret_cast<HMENU>(IDC_HUMANIZED), inst, nullptr);
-        SendMessageW(human, WM_SETFONT, reinterpret_cast<WPARAM>(font_ui), TRUE);
-
-        addLabel(L"Ativar duplo-clique para os botões:", 16, 150, 400, 24);
-
-        static const wchar_t* names[BTN_COUNT] = {
-            L"Botão Esquerdo", L"Botão Direito", L"Botão Meio",
-            L"Botão Lateral 1 (X1)", L"Botão Lateral 2 (X2)"
-        };
-        for (int i = 0; i < BTN_COUNT; ++i) {
-            HWND chk = CreateWindowW(L"BUTTON", names[i],
-                                     WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                                     16, 184 + i * 32, 400, 28, parent,
-                                     reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_TRIGGER_BASE + i)),
-                                     inst, nullptr);
-            SendMessageW(chk, WM_SETFONT, reinterpret_cast<WPARAM>(font_ui), TRUE);
-            if (i == BTN_LEFT) SendMessageW(chk, BM_SETCHECK, BST_CHECKED, 0);
-        }
-
-        HWND ov = CreateWindowW(L"BUTTON", L"Ativar Sobreposição de Tela (Overlay)",
-                                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                                16, 360, 400, 28, parent, reinterpret_cast<HMENU>(IDC_OVERLAY), inst, nullptr);
-        SendMessageW(ov, WM_SETFONT, reinterpret_cast<WPARAM>(font_ui), TRUE);
+    void ResizeWebView() {
+        if (!controller) return;
+        RECT rc{};
+        GetClientRect(hwnd, &rc);
+        controller->put_Bounds(rc);
     }
 
-    void BuildTestPage(HWND parent, int w, int h) {
-        HWND hint = CreateWindowW(L"STATIC",
-                                  L"Dê um duplo-clique aqui para testar o CPS.\nCada clique gerará uma onda de água.",
-                                  WS_CHILD | WS_VISIBLE | SS_CENTER,
-                                  10, 8, w - 20, 40, parent, reinterpret_cast<HMENU>(IDC_TEST_HINT), inst, nullptr);
-        SendMessageW(hint, WM_SETFONT, reinterpret_cast<WPARAM>(font_ui), TRUE);
-
-        WNDCLASSW cwc{};
-        cwc.lpfnWndProc = &App::CanvasProc;
-        cwc.hInstance = inst;
-        cwc.lpszClassName = L"ACM3Canvas";
-        cwc.hbrBackground = brush_canvas;
-        cwc.hCursor = LoadCursor(nullptr, IDC_CROSS);
-        RegisterClassW(&cwc);
-
-        canvas = CreateWindowW(L"ACM3Canvas", L"",
-                               WS_CHILD | WS_VISIBLE | WS_BORDER,
-                               10, 55, w - 20, h - 70, parent, nullptr, inst, this);
+    void PostToWeb(const std::string& jsonUtf8) {
+        if (!webview) return;
+        webview->PostWebMessageAsJson(Widen(jsonUtf8).c_str());
     }
 
-    void ShowTab(int index) {
-        ShowWindow(page_config, index == 0 ? SW_SHOW : SW_HIDE);
-        ShowWindow(page_test, index == 1 ? SW_SHOW : SW_HIDE);
-    }
-
-    void UpdateStatus() {
-        if (!g_engine.master_enabled.load()) {
-            SetWindowTextW(status, L"Status: DESLIGADO GERAL");
-            return;
-        }
-        if (g_engine.AnyClicking()) {
-            SetWindowTextW(status, L"Status: ATIVO");
-        } else {
-            SetWindowTextW(status, L"Status: INATIVO");
-        }
-        InvalidateRect(status, nullptr, TRUE);
+    void PushStatus() {
+        std::string state = "inactive";
+        if (!g_engine.master_enabled.load()) state = "off";
+        else if (g_engine.AnyClicking()) state = "active";
+        PostToWeb(std::string("{\"type\":\"status\",\"value\":\"") + state + "\"}");
     }
 
     void UpdateOverlay() {
@@ -652,62 +584,46 @@ struct App {
         }
     }
 
-    void AddRipple(int x, int y) {
-        Ripple r;
-        r.x = x;
-        r.y = y;
-        r.radius = 5;
-        r.color = kRippleColors[static_cast<int>(RandUniform(0, 4.999))];
-        ripples.push_back(r);
-        if (canvas) InvalidateRect(canvas, nullptr, FALSE);
-    }
-
-    void TickRipples() {
-        if (ripples.empty()) return;
-        for (auto& r : ripples) r.radius += 4;
-        ripples.erase(std::remove_if(ripples.begin(), ripples.end(),
-                                     [](const Ripple& r) { return r.radius > 60; }),
-                      ripples.end());
-        if (canvas) InvalidateRect(canvas, nullptr, FALSE);
-    }
-
-    static LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-        App* self = reinterpret_cast<App*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-        if (msg == WM_CREATE) {
-            auto* cs = reinterpret_cast<CREATESTRUCTW*>(lParam);
-            SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(cs->lpCreateParams));
-            return 0;
+    void HandleWebMessage(const std::string& json) {
+        const std::string type = JsonGetString(json, "type");
+        if (type == "ready") {
+            PushStatus();
+            return;
         }
-        if (!self) return DefWindowProcW(hwnd, msg, wParam, lParam);
-
-        if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN || msg == WM_MBUTTONDOWN) {
-            self->AddRipple(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
-            return 0;
-        }
-        if (msg == WM_PAINT) {
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hwnd, &ps);
-            RECT rc;
-            GetClientRect(hwnd, &rc);
-            FillRect(hdc, &rc, self->brush_canvas);
-
-            for (const auto& r : self->ripples) {
-                HPEN pen = CreatePen(PS_SOLID, r.radius > 40 ? 1 : 2, r.color);
-                HGDIOBJ oldPen = SelectObject(hdc, pen);
-                HGDIOBJ oldBrush = SelectObject(hdc, GetStockObject(HOLLOW_BRUSH));
-                Ellipse(hdc, r.x - r.radius, r.y - r.radius, r.x + r.radius, r.y + r.radius);
-                HBRUSH fill = CreateSolidBrush(r.color);
-                SelectObject(hdc, fill);
-                Ellipse(hdc, r.x - 2, r.y - 2, r.x + 2, r.y + 2);
-                SelectObject(hdc, oldBrush);
-                SelectObject(hdc, oldPen);
-                DeleteObject(pen);
-                DeleteObject(fill);
+        if (type == "setMaster") {
+            const bool on = JsonGetBool(json, "value", true);
+            g_engine.master_enabled = on;
+            if (!on) {
+                for (int i = 0; i < BTN_COUNT; ++i) g_engine.clicking_state[i] = false;
             }
-            EndPaint(hwnd, &ps);
-            return 0;
+            PushStatus();
+            return;
         }
-        return DefWindowProcW(hwnd, msg, wParam, lParam);
+        if (type == "setCps") {
+            g_engine.cps = (std::max)(1, (std::min)(100, JsonGetInt(json, "value", 12)));
+            return;
+        }
+        if (type == "setHumanized") {
+            g_engine.humanized = JsonGetBool(json, "value", false);
+            return;
+        }
+        if (type == "setOverlay") {
+            overlay_on = JsonGetBool(json, "value", false);
+            overlay.Show(overlay_on);
+            UpdateOverlay();
+            return;
+        }
+        if (type == "setTrigger") {
+            const std::string button = JsonGetString(json, "button");
+            const bool value = JsonGetBool(json, "value", false);
+            int idx = -1;
+            if (button == "left") idx = BTN_LEFT;
+            else if (button == "right") idx = BTN_RIGHT;
+            else if (button == "middle") idx = BTN_MIDDLE;
+            else if (button == "x1") idx = BTN_X1;
+            else if (button == "x2") idx = BTN_X2;
+            if (idx >= 0) g_engine.active_triggers[idx] = value;
+        }
     }
 
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -722,95 +638,21 @@ struct App {
         }
 
         switch (msg) {
-            case WM_CREATE:
-                if (self) self->BuildChildren();
+            case WM_SIZE:
+                if (self) self->ResizeWebView();
                 return 0;
-
-            case WM_COMMAND: {
-                if (!self) break;
-                const int id = LOWORD(wParam);
-                if (id == IDC_MASTER) {
-                    const bool on = SendMessageW(GetDlgItem(hwnd, IDC_MASTER), BM_GETCHECK, 0, 0) == BST_CHECKED;
-                    g_engine.master_enabled = on;
-                    SetWindowTextW(GetDlgItem(hwnd, IDC_MASTER), on ? L"LIGADO" : L"DESLIGADO");
-                    if (!on) {
-                        for (int i = 0; i < BTN_COUNT; ++i) g_engine.clicking_state[i] = false;
-                    }
-                    self->UpdateStatus();
-                } else if (id == IDC_HUMANIZED) {
-                    g_engine.humanized =
-                        SendMessageW(GetDlgItem(self->page_config, IDC_HUMANIZED), BM_GETCHECK, 0, 0) == BST_CHECKED;
-                } else if (id == IDC_OVERLAY) {
-                    self->overlay_on =
-                        SendMessageW(GetDlgItem(self->page_config, IDC_OVERLAY), BM_GETCHECK, 0, 0) == BST_CHECKED;
-                    self->overlay.Show(self->overlay_on);
-                    self->UpdateOverlay();
-                } else if (id >= IDC_TRIGGER_BASE && id < IDC_TRIGGER_BASE + BTN_COUNT) {
-                    const int btn = id - IDC_TRIGGER_BASE;
-                    g_engine.active_triggers[btn] =
-                        SendMessageW(GetDlgItem(self->page_config, id), BM_GETCHECK, 0, 0) == BST_CHECKED;
-                }
+            case WM_APP_STATUS:
+                if (self) self->PushStatus();
+                return 0;
+            case WM_APP_WEBMSG: {
+                auto* heap = reinterpret_cast<std::wstring*>(lParam);
+                if (self && heap) self->HandleWebMessage(Narrow(*heap));
+                delete heap;
                 return 0;
             }
-
-            case WM_HSCROLL:
-                if (self && reinterpret_cast<HWND>(lParam) == self->cps_slider) {
-                    const int cps = static_cast<int>(SendMessageW(self->cps_slider, TBM_GETPOS, 0, 0));
-                    g_engine.cps = cps;
-                    const std::wstring text = L"Velocidade (CPS): " + std::to_wstring(cps);
-                    SetWindowTextW(self->cps_label, text.c_str());
-                }
-                return 0;
-
-            case WM_NOTIFY: {
-                auto* hdr = reinterpret_cast<NMHDR*>(lParam);
-                if (self && hdr->idFrom == IDC_TABS && hdr->code == TCN_SELCHANGE) {
-                    self->ShowTab(TabCtrl_GetCurSel(self->tabs));
-                }
-                return 0;
-            }
-
-            case WM_APP + 1:
-                if (self) self->UpdateStatus();
-                return 0;
-
             case WM_TIMER:
-                if (!self) return 0;
-                if (wParam == kTimerOverlay) self->UpdateOverlay();
-                if (wParam == kTimerRipple) self->TickRipples();
+                if (self && wParam == kTimerOverlay) self->UpdateOverlay();
                 return 0;
-
-            case WM_CTLCOLORSTATIC: {
-                HDC hdc = reinterpret_cast<HDC>(wParam);
-                HWND ctrl = reinterpret_cast<HWND>(lParam);
-                SetBkMode(hdc, TRANSPARENT);
-                if (self && ctrl == self->status) {
-                    if (!g_engine.master_enabled.load()) SetTextColor(hdc, kGray);
-                    else if (g_engine.AnyClicking()) SetTextColor(hdc, kGreen);
-                    else SetTextColor(hdc, kRed);
-                    return reinterpret_cast<LRESULT>(self->brush_bg);
-                }
-                SetTextColor(hdc, kText);
-                if (self && (GetParent(ctrl) == self->page_config || GetParent(ctrl) == self->page_test)) {
-                    return reinterpret_cast<LRESULT>(self->brush_bg);
-                }
-                return reinterpret_cast<LRESULT>(self ? self->brush_bg : reinterpret_cast<HBRUSH>(GetStockObject(DKGRAY_BRUSH)));
-            }
-
-            case WM_CTLCOLORBTN: {
-                HDC hdc = reinterpret_cast<HDC>(wParam);
-                SetBkMode(hdc, TRANSPARENT);
-                SetTextColor(hdc, kText);
-                return reinterpret_cast<LRESULT>(self ? self->brush_bg : reinterpret_cast<HBRUSH>(GetStockObject(DKGRAY_BRUSH)));
-            }
-
-            case WM_ERASEBKGND: {
-                RECT rc;
-                GetClientRect(hwnd, &rc);
-                FillRect(reinterpret_cast<HDC>(wParam), &rc, self ? self->brush_bg : reinterpret_cast<HBRUSH>(GetStockObject(DKGRAY_BRUSH)));
-                return 1;
-            }
-
             case WM_DESTROY:
                 if (self) self->Destroy();
                 PostQuitMessage(0);
@@ -825,11 +667,15 @@ struct App {
 // ---------------------------------------------------------------------------
 
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int) {
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (FAILED(hr)) return 1;
+
     timeBeginPeriod(1);
 
     App app;
     if (!app.Create(hInstance)) {
         timeEndPeriod(1);
+        CoUninitialize();
         return 1;
     }
 
@@ -840,5 +686,6 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int) {
     }
 
     timeEndPeriod(1);
+    CoUninitialize();
     return static_cast<int>(msg.wParam);
 }

@@ -35,11 +35,13 @@ Dependências (`python/requirements.txt`): `pyinstaller`, `pynput`, `customtkint
 | Item | Detalhe |
 |------|---------|
 | Linguagem | C++17 |
-| Interface | Win32 API (tema escuro simples) |
+| Compilador | **MSVC** (Visual Studio / Build Tools) |
+| Interface | **WebView2** (`cpp/ui` HTML/CSS/JS) |
 | Mouse (leitura) | `SetWindowsHookEx(WH_MOUSE_LL)` |
 | Mouse (injeção) | `SendInput` |
-| Build | CMake → `AutoClickerM3Cpp.exe` |
-| Dependências | Nenhuma de terceiros (só libs do Windows) |
+| Build | CMake + gerador `Visual Studio 18 2026` → `AutoClickerM3Cpp.exe` |
+| Runtime | Microsoft Edge WebView2 Runtime |
+| Dependências de código | WebView2 SDK (NuGet baixado no configure) |
 
 ---
 
@@ -55,10 +57,11 @@ AutoClicker/
 │   ├── run.bat                     # Windows
 │   └── run.sh                      # Linux / macOS
 ├── cpp/
-│   ├── main.cpp                    # Versão C++ (secundária, Win32)
-│   ├── CMakeLists.txt
-│   ├── run.bat                     # Windows (build + run)
-│   └── run.sh                      # Aviso fora do Windows / MSYS
+│   ├── main.cpp                    # Versão C++ (motor + host WebView2)
+│   ├── CMakeLists.txt              # MSVC + NuGet WebView2
+│   ├── ui/                         # index.html, styles.css, app.js
+│   ├── run.bat                     # Windows (build MSVC + run)
+│   └── run.sh                      # Aviso: Windows-only
 ├── assets/
 ├── .cursor/skills/autoclicker-m3/  # Skill do agente
 ├── .cursor/rules/                  # Rules do projeto
@@ -204,8 +207,8 @@ Tudo em memória. Hardcoded: tema Dark+blue, threshold 0.3 s, janela 500×750, o
 |--------|------------|---------------|
 | `run.bat` / `run.sh` (raiz) | Win / Linux / macOS | Encaminha para `python/run.*` |
 | `python/run.bat` / `python/run.sh` | Win / Linux / macOS | Roda `main.py` (usa `venv` se existir) |
-| `cpp/run.bat` | Windows | Compila se preciso e abre o `.exe` |
-| `cpp/run.sh` | Windows (MSYS/MinGW) | Idem; fora do Windows encerra com aviso |
+| `cpp/run.bat` | Windows | Compila com MSVC+WebView2 se preciso e abre o `.exe` |
+| `cpp/run.sh` | — | Encera: C++ é Windows-only (MSVC/WebView2) |
 
 ### Python — desenvolvimento
 
@@ -227,13 +230,17 @@ python build.py
 
 Flags: `--onefile`, `--windowed`, `--name=AutoClickerM3`, `--collect-all=customtkinter`, `--noconfirm`.
 
-### C++ — build (MinGW)
+### C++ — build (MSVC + WebView2)
 
 ```powershell
-cmake -S cpp -B cpp/build -G "MinGW Makefiles"
-cmake --build cpp/build
-# → cpp/build/bin/AutoClickerM3Cpp.exe
+cmake -S cpp -B cpp/build -G "Visual Studio 18 2026" -A x64
+cmake --build cpp/build --config Release
+# → cpp/build/bin/Release/AutoClickerM3Cpp.exe
 ```
+
+Ou: `cpp\run.bat` (compila se o `.exe` não existir).
+
+Requer WebView2 Runtime (já comum no Windows 10/11).
 
 ### Release (CI)
 

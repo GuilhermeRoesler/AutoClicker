@@ -4,7 +4,8 @@ description: >-
   Domain knowledge for Auto Clicker M3 Pro (Python primary + C++ secondary).
   Explains architecture, double-click+hold trigger, ClickEngine anti-feedback,
   UI controls, build/release, and constraints. Use when changing python/main.py,
-  cpp/main.cpp, python/build.py, click behavior, CPS, triggers, overlay, UI, or packaging.
+  cpp/main.cpp, cpp/ui/*, python/build.py, click behavior, CPS, triggers,
+  overlay, UI, or packaging.
 ---
 
 # Auto Clicker M3 Pro
@@ -24,7 +25,7 @@ Two implementations at the same hierarchy level:
 | Path | Role |
 |------|------|
 | `python/main.py` | **Primary** — Python / CustomTkinter / pynput |
-| `cpp/main.cpp` | **Secondary** — C++ / Win32 / `WH_MOUSE_LL` + `SendInput` |
+| `cpp/main.cpp` + `cpp/ui/` | **Secondary** — C++ / MSVC / WebView2 + `WH_MOUSE_LL` / `SendInput` |
 
 ### Python (`python/main.py`)
 
@@ -36,9 +37,16 @@ Two implementations at the same hierarchy level:
 
 Threads: pynput `Listener`, daemon `_click_loop`, Tk mainloop. UI updates from engine use `self.after(0, ...)`.
 
-### C++ (`cpp/main.cpp`)
+### C++ (`cpp/main.cpp` + `cpp/ui/`)
 
-Same roles in one translation unit: `ClickEngine` (LL hook + click thread), `OverlayWindow`, Win32 `App` UI. Status updates via `PostMessage(WM_APP+1)`.
+| Piece | Role |
+|-------|------|
+| `ClickEngine` | LL hook + click thread + anti-feedback |
+| `OverlayWindow` | HUD Win32 layered |
+| `App` | Host Win32 + WebView2; mensagens JSON com a UI |
+| `cpp/ui/*` | HTML/CSS/JS (Material dark) |
+
+Status: `PostMessage(WM_APP+1)` → `PostWebMessageAsJson`. Controles: `chrome.webview.postMessage`.
 
 ## Invariants (do not break)
 
@@ -51,17 +59,18 @@ Same roles in one translation unit: `ClickEngine` (LL hook + click thread), `Ove
 ## Stack
 
 - **Primary:** Python 3.12 (CI), `customtkinter` + `tkinter`, `pynput`
-  - Build: `cd python && python build.py` → `python/dist/AutoClickerM3.exe` (PyInstaller onefile, windowed)
+  - Build: `cd python && python build.py` → `python/dist/AutoClickerM3.exe`
   - Release: `.github/workflows/release.yml` on tag `v*` or manual dispatch
-- **Secondary:** C++17, Win32 API (no third-party deps)
-  - Build: `cmake -S cpp -B cpp/build -G "MinGW Makefiles"` then `cmake --build cpp/build`
-  - Output: `cpp/build/bin/AutoClickerM3Cpp.exe`
-  - Run: root `run.bat` / `run.sh` → Python; `python/run.*` and `cpp/run.*` for each stack
+- **Secondary:** C++17, **MSVC**, **WebView2** (NuGet baixado pelo CMake), Win32 input
+  - Requer: Visual Studio Build Tools + WebView2 Runtime
+  - Build: `cmake -S cpp -B cpp/build -G "Visual Studio 18 2026" -A x64` then `cmake --build cpp/build --config Release`
+  - Output: `cpp/build/bin/Release/AutoClickerM3Cpp.exe` (+ pasta `ui/`)
+  - Run: `cpp/run.bat` (compila se faltar o `.exe`); Linux/macOS → use Python
 
 ## When editing
 
 1. Read [reference.md](reference.md) for full behavior, UI defaults, timing, and limitations.
 2. Preserve the double-click+hold model unless the user explicitly asks to change it.
-3. Keep Portuguese UI strings consistent with existing labels.
+3. Keep Portuguese UI strings consistent with existing labels (Python e `cpp/ui`).
 4. After engine changes, mentally verify: activate (double-click+hold) → inject → physical release stops → simulated events ignored.
 5. If changing trigger/CPS/anti-feedback, update **both** `python/main.py` and `cpp/main.cpp` unless the user asks for only one.

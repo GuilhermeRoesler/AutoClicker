@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Auto Clicker M3 Pro</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <h1>Auto Clicker</h1>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="master" checked />
+        <span class="track"></span>
+        <span class="label" id="masterLabel">LIGADO</span>
+      </label>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="config" type="button">Configurações</button>
+      <button class="tab" data-tab="test" type="button">Teste (Ripples)</button>
+    </nav>
+
+    <main>
+      <section id="panel-config" class="panel active">
+        <article class="card">
+          <div class="card-head">
+            <h2>Velocidade</h2>
+            <span class="pill" id="cpsValue">12 CPS</span>
+          </div>
+          <input type="range" id="cps" min="1" max="100" value="12" />
+          <label class="row-check">
+            <input type="checkbox" id="humanized" />
+            <span>Modo Humanizado (Aleatoriedade)</span>
+          </label>
+        </article>
+
+        <article class="card">
+          <h2>Ativar duplo-clique para os botões</h2>
+          <div class="checks">
+            <label><input type="checkbox" data-trigger="left" checked /> Botão Esquerdo</label>
+            <label><input type="checkbox" data-trigger="right" /> Botão Direito</label>
+            <label><input type="checkbox" data-trigger="middle" /> Botão Meio</label>
+            <label><input type="checkbox" data-trigger="x1" /> Botão Lateral 1 (X1)</label>
+            <label><input type="checkbox" data-trigger="x2" /> Botão Lateral 2 (X2)</label>
+          </div>
+        </article>
+
+        <article class="card">
+          <label class="row-check">
+            <input type="checkbox" id="overlay" />
+            <span>Ativar Sobreposição de Tela (Overlay)</span>
+          </label>
+        </article>
+      </section>
+
+      <section id="panel-test" class="panel">
+        <p class="hint">Dê um duplo-clique aqui para testar o CPS.<br />Cada clique gerará uma onda de água.</p>
+        <div id="canvas" class="canvas"></div>
+      </section>
+    </main>
+
+    <footer class="status" id="status" data-state="inactive">Status: INATIVO</footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

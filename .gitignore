@@ -7,3 +7,4 @@ python/dist
 python/build
 python/venv
 cpp/build
+cpp/webview2-data

@@ -77,18 +77,26 @@ Releases prontas também estão disponíveis na [página de Releases](https://gi
 
 ## C++ (secundária)
 
-Win32, sem dependências externas — mesmo modelo de duplo-clique + hold.
+Windows-only com **MSVC + WebView2** (UI HTML em `cpp/ui/`).
 
 ```powershell
-cmake -S cpp -B cpp/build -G "MinGW Makefiles"
-cmake --build cpp/build
-.\cpp\build\bin\AutoClickerM3Cpp.exe
+.\cpp\run.bat
 ```
+
+Ou build manual:
+
+```powershell
+cmake -S cpp -B cpp/build -G "Visual Studio 18 2026" -A x64
+cmake --build cpp/build --config Release
+.\cpp\build\bin\Release\AutoClickerM3Cpp.exe
+```
+
+Requer Visual Studio Build Tools (C++) e Microsoft Edge WebView2 Runtime.
 
 ## Stack
 
 - **Primária:** Python · CustomTkinter · pynput · PyInstaller
-- **Secundária:** C++17 · Win32 · CMake
+- **Secundária:** C++17 · MSVC · WebView2 · CMake
 
 ## Licença
 
