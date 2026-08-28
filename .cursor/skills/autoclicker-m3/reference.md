@@ -237,7 +237,16 @@ cmake --build cpp/build
 
 ### Release (CI)
 
-`.github/workflows/release.yml` — tag `v*` ou `workflow_dispatch`; build a partir de `python/`; publica o `.exe` **Python**. A versão C++ ainda não entra no release automatizado.
+`.github/workflows/release.yml` — tag `v*` ou `workflow_dispatch`.
+
+Artefatos publicados:
+
+| Arquivo | Origem |
+|---------|--------|
+| `AutoClickerM3-windows.exe` | Python (Windows) |
+| `AutoClickerM3-linux` | Python (Linux) |
+| `AutoClickerM3-macos` | Python (macOS) |
+| `windows-optimized.exe` | C++ / Win32+GDI+ (Windows) |
 
 ---
 

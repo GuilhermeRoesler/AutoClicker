@@ -73,7 +73,7 @@ python build.py
 
 O arquivo sai em `python/dist/AutoClickerM3.exe`.
 
-Releases prontas também estão disponíveis na [página de Releases](https://github.com/GuilhermeRoesler/AutoClicker/releases) do GitHub.
+Releases prontas também estão disponíveis na [página de Releases](https://github.com/GuilhermeRoesler/AutoClicker/releases) do GitHub — incluindo `windows-optimized.exe` (build C++ nativo).
 
 ## C++ (secundária)
 

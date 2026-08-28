@@ -19,5 +19,7 @@ target_link_libraries(AutoClickerM3Cpp PRIVATE gdiplus gdi32 user32 winmm msimg3
 
 set_target_properties(AutoClickerM3Cpp PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+  RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin"
+  RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin"
   OUTPUT_NAME "AutoClickerM3Cpp"
 )
