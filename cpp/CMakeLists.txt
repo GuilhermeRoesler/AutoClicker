@@ -10,10 +10,10 @@ add_executable(AutoClickerM3Cpp WIN32
 )
 
 if(MSVC)
-  target_compile_definitions(AutoClickerM3Cpp PRIVATE UNICODE _UNICODE)
+  target_compile_definitions(AutoClickerM3Cpp PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_compile_options(AutoClickerM3Cpp PRIVATE /W4 /utf-8)
 else()
-  target_compile_definitions(AutoClickerM3Cpp PRIVATE UNICODE _UNICODE)
+  target_compile_definitions(AutoClickerM3Cpp PRIVATE UNICODE _UNICODE NOMINMAX)
   target_compile_options(AutoClickerM3Cpp PRIVATE -Wall -Wextra -municode)
   target_link_options(AutoClickerM3Cpp PRIVATE -mwindows -municode)
 endif()
