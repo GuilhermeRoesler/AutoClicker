@@ -1,3 +1,4 @@
 pyinstaller
 pynput
 customtkinter
+python-xlib; sys_platform == "linux"
