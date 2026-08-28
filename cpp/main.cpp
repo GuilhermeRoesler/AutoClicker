@@ -18,6 +18,7 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <objidl.h>
+#include <shlobj.h>
 #include <gdiplus.h>
 
 #include "resource.h"
@@ -40,6 +41,9 @@
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "winmm.lib")
 #pragma comment(lib, "msimg32.lib")
+#pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "ole32.lib")
 #endif
 
 using namespace Gdiplus;
@@ -94,6 +98,113 @@ static double WallSec() {
 static std::mt19937& Rng() {
     static thread_local std::mt19937 gen{std::random_device{}()};
     return gen;
+}
+
+// ---------------------------------------------------------------------------
+// Menu Iniciar / busca Win+S (atalho + App Paths — sem admin)
+// ---------------------------------------------------------------------------
+
+static constexpr const wchar_t* kStartMenuLnkName = L"Auto Clicker M3 Pro.lnk";
+static constexpr const wchar_t* kAppPathsKey =
+    L"Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\AutoClickerM3Cpp.exe";
+
+static std::wstring GetExePath() {
+    wchar_t buf[MAX_PATH]{};
+    const DWORD n = GetModuleFileNameW(nullptr, buf, MAX_PATH);
+    if (n == 0 || n >= MAX_PATH) return {};
+    return buf;
+}
+
+static std::wstring GetExeDir(const std::wstring& exe) {
+    const size_t slash = exe.find_last_of(L"\\/");
+    if (slash == std::wstring::npos) return {};
+    return exe.substr(0, slash);
+}
+
+static std::wstring GetStartMenuShortcutPath() {
+    wchar_t programs[MAX_PATH]{};
+    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_PROGRAMS, nullptr, SHGFP_TYPE_CURRENT, programs)))
+        return {};
+    return std::wstring(programs) + L"\\" + kStartMenuLnkName;
+}
+
+static bool RegWriteString(HKEY root, const wchar_t* subkey, const wchar_t* valueName,
+                           const wchar_t* data) {
+    HKEY key = nullptr;
+    if (RegCreateKeyExW(root, subkey, 0, nullptr, 0, KEY_SET_VALUE, nullptr, &key, nullptr) != ERROR_SUCCESS)
+        return false;
+    const DWORD bytes = static_cast<DWORD>((wcslen(data) + 1) * sizeof(wchar_t));
+    const LONG ok = RegSetValueExW(key, valueName, 0, REG_SZ,
+                                   reinterpret_cast<const BYTE*>(data), bytes);
+    RegCloseKey(key);
+    return ok == ERROR_SUCCESS;
+}
+
+static bool RegDeleteTreeHkcu(const wchar_t* subkey) {
+    const LONG rc = RegDeleteTreeW(HKEY_CURRENT_USER, subkey);
+    return rc == ERROR_SUCCESS || rc == ERROR_FILE_NOT_FOUND;
+}
+
+static void CleanupLegacyContextMenu() {
+    RegDeleteTreeHkcu(L"Software\\Classes\\DesktopBackground\\shell\\AutoClickerM3Pro");
+    RegDeleteTreeHkcu(L"Software\\Classes\\Directory\\Background\\shell\\AutoClickerM3Pro");
+}
+
+static bool IsStartMenuRegistered() {
+    const std::wstring lnk = GetStartMenuShortcutPath();
+    if (lnk.empty()) return false;
+    const DWORD attrs = GetFileAttributesW(lnk.c_str());
+    return attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+static bool RegisterStartMenu() {
+    const std::wstring exe = GetExePath();
+    if (exe.empty()) return false;
+
+    const std::wstring lnk = GetStartMenuShortcutPath();
+    if (lnk.empty()) return false;
+
+    const std::wstring workDir = GetExeDir(exe);
+
+    IShellLinkW* shellLink = nullptr;
+    HRESULT hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
+                                  IID_IShellLinkW, reinterpret_cast<void**>(&shellLink));
+    if (FAILED(hr) || !shellLink) return false;
+
+    shellLink->SetPath(exe.c_str());
+    if (!workDir.empty()) shellLink->SetWorkingDirectory(workDir.c_str());
+    shellLink->SetDescription(L"Auto Clicker M3 Pro");
+    shellLink->SetIconLocation(exe.c_str(), 0);
+
+    IPersistFile* persist = nullptr;
+    hr = shellLink->QueryInterface(IID_IPersistFile, reinterpret_cast<void**>(&persist));
+    if (SUCCEEDED(hr) && persist) {
+        hr = persist->Save(lnk.c_str(), TRUE);
+        persist->Release();
+    }
+    shellLink->Release();
+    if (FAILED(hr)) return false;
+
+    if (!RegWriteString(HKEY_CURRENT_USER, kAppPathsKey, nullptr, exe.c_str())) return false;
+    if (!workDir.empty())
+        RegWriteString(HKEY_CURRENT_USER, kAppPathsKey, L"Path", workDir.c_str());
+
+    CleanupLegacyContextMenu();
+    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
+    return true;
+}
+
+static bool UnregisterStartMenu() {
+    const std::wstring lnk = GetStartMenuShortcutPath();
+    bool ok = true;
+    if (!lnk.empty()) {
+        if (!DeleteFileW(lnk.c_str()) && GetLastError() != ERROR_FILE_NOT_FOUND)
+            ok = false;
+    }
+    ok = RegDeleteTreeHkcu(kAppPathsKey) && ok;
+    CleanupLegacyContextMenu();
+    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
+    return ok;
 }
 
 static double RandUniform(double a, double b) {
@@ -451,6 +562,7 @@ struct App {
 
     int tab = 0;  // 0 config, 1 test
     bool overlay_on = false;
+    bool start_menu_on = false;
     bool dragging_slider = false;
     int hover_id = -1;
 
@@ -461,6 +573,7 @@ struct App {
     RectF rc_human_sw{};
     RectF rc_triggers[BTN_COUNT]{};
     RectF rc_overlay_sw{};
+    RectF rc_startmenu_sw{};
     RectF rc_canvas{};
     RectF rc_content{};
 
@@ -524,6 +637,8 @@ struct App {
             SendMessageW(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(wc.hIconSm));
 
         Layout();
+        CleanupLegacyContextMenu();
+        start_menu_on = IsStartMenuRegistered();
         overlay.Create(inst);
         g_engine.Start(hwnd);
         SetTimer(hwnd, kTimerOverlay, 100, nullptr);
@@ -574,6 +689,10 @@ struct App {
         y = card2.Y + card2.Height + 12.f;
         RectF card3(rc_content.X, y, rc_content.Width, 64.f);
         rc_overlay_sw = RectF(card3.X + 20.f, card3.Y + 18.f, 52.f, 28.f);
+
+        y = card3.Y + card3.Height + 12.f;
+        RectF card4(rc_content.X, y, rc_content.Width, 64.f);
+        rc_startmenu_sw = RectF(card4.X + 20.f, card4.Y + 18.f, 52.f, 28.f);
 
         // Test canvas
         rc_canvas = RectF(rc_content.X, tab_y + tab_h + 56.f, rc_content.Width,
@@ -697,6 +816,15 @@ struct App {
             DrawSwitchFixed(g, rc_overlay_sw, overlay_on);
             DrawStringLeft(g, L"Ativar Sobreposição de Tela (Overlay)", *font_ui, textBrush,
                            RectF(rc_overlay_sw.GetRight() + 12.f, rc_overlay_sw.Y, 320.f, rc_overlay_sw.Height));
+
+            // Card menu Iniciar
+            RectF card4(rc_content.X, card3.GetBottom() + 12.f, rc_content.Width, 64.f);
+            FillRoundRect(g, cardBrush, card4, 16.f);
+            DrawRoundRect(g, cardPen, card4, 16.f);
+            DrawSwitchFixed(g, rc_startmenu_sw, start_menu_on);
+            DrawStringLeft(g, L"Aparecer no Menu Iniciar (Win + busca)", *font_ui, textBrush,
+                           RectF(rc_startmenu_sw.GetRight() + 12.f, rc_startmenu_sw.Y, 360.f,
+                                 rc_startmenu_sw.Height));
         } else {
             DrawStringCenter(g,
                 L"Dê um duplo-clique aqui para testar o CPS.\nCada clique gerará uma onda de água.",
@@ -757,6 +885,7 @@ struct App {
             for (int i = 0; i < BTN_COUNT; ++i)
                 if (PtIn(rc_triggers[i], x, y)) return 10 + i;
             if (PtIn(RectF(rc_overlay_sw.X, rc_overlay_sw.Y, 360.f, rc_overlay_sw.Height), x, y)) return 6;
+            if (PtIn(RectF(rc_startmenu_sw.X, rc_startmenu_sw.Y, 400.f, rc_startmenu_sw.Height), x, y)) return 8;
         } else if (PtIn(rc_canvas, x, y)) {
             return 7;
         }
@@ -848,6 +977,20 @@ struct App {
                     self->overlay.Show(self->overlay_on);
                     self->UpdateOverlay();
                     InvalidateRect(hwnd, nullptr, FALSE);
+                } else if (id == 8) {
+                    const bool want = !self->start_menu_on;
+                    const bool ok = want ? RegisterStartMenu() : UnregisterStartMenu();
+                    if (ok) {
+                        self->start_menu_on = want;
+                    } else {
+                        MessageBoxW(hwnd,
+                            want
+                                ? L"Não foi possível adicionar ao Menu Iniciar."
+                                : L"Não foi possível remover do Menu Iniciar.",
+                            L"Auto Clicker M3 Pro", MB_OK | MB_ICONWARNING);
+                        self->start_menu_on = IsStartMenuRegistered();
+                    }
+                    InvalidateRect(hwnd, nullptr, FALSE);
                 } else if (id >= 10 && id < 10 + BTN_COUNT) {
                     const int btn = id - 10;
                     g_engine.active_triggers[btn] = !g_engine.active_triggers[btn];
@@ -893,10 +1036,14 @@ struct App {
 };
 
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int) {
+    HRESULT comHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+
     ULONG_PTR gdiplusToken = 0;
     GdiplusStartupInput gdiplusStartupInput;
-    if (GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, nullptr) != Ok)
+    if (GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, nullptr) != Ok) {
+        if (SUCCEEDED(comHr)) CoUninitialize();
         return 1;
+    }
 
     timeBeginPeriod(1);
 
@@ -912,5 +1059,6 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int) {
 
     timeEndPeriod(1);
     GdiplusShutdown(gdiplusToken);
+    if (SUCCEEDED(comHr)) CoUninitialize();
     return ok == 0 ? 0 : 1;
 }

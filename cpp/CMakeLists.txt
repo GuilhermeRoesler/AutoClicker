@@ -18,7 +18,7 @@ else()
   target_link_options(AutoClickerM3Cpp PRIVATE -mwindows -municode)
 endif()
 
-target_link_libraries(AutoClickerM3Cpp PRIVATE gdiplus gdi32 user32 winmm msimg32)
+target_link_libraries(AutoClickerM3Cpp PRIVATE gdiplus gdi32 user32 winmm msimg32 shell32 advapi32 ole32)
 
 set_target_properties(AutoClickerM3Cpp PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
