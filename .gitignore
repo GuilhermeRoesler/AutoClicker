@@ -1,5 +1,9 @@
 *.spec
 venv
+__pycache__/
 dist
 build
+python/dist
+python/build
+python/venv
 cpp/build

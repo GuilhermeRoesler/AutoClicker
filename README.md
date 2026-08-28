@@ -20,35 +20,42 @@ Não usa atalhos de teclado nem coordenadas fixas: o gatilho é o próprio botã
 - **Overlay** com CPS real em tempo real
 - Aba de teste com efeito de ripples
 
-## Requisitos
+## Estrutura
 
-- Windows
-- Python 3.12+ (para rodar a partir do código)
+```
+AutoClicker/
+├── python/   # versão primária (CustomTkinter + pynput)
+├── cpp/      # versão secundária (Win32)
+└── assets/
+```
 
-## Instalação e execução
+## Python (primária)
+
+Requisitos: Windows · Python 3.12+
 
 ```powershell
 git clone https://github.com/GuilhermeRoesler/AutoClicker.git
-cd AutoClicker
+cd AutoClicker/python
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 python main.py
 ```
 
-## Build do executável
+### Build do executável
 
 ```powershell
+cd python
 python build.py
 ```
 
-O arquivo sai em `dist/AutoClickerM3.exe`.
+O arquivo sai em `python/dist/AutoClickerM3.exe`.
 
 Releases prontas também estão disponíveis na [página de Releases](https://github.com/GuilhermeRoesler/AutoClicker/releases) do GitHub.
 
-## Versão C++ (secundária)
+## C++ (secundária)
 
-Há uma implementação paralela em `cpp/` (Win32, sem dependências externas), com o mesmo modelo de duplo-clique + hold.
+Win32, sem dependências externas — mesmo modelo de duplo-clique + hold.
 
 ```powershell
 cmake -S cpp -B cpp/build -G "MinGW Makefiles"

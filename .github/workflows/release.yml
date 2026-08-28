@@ -49,18 +49,20 @@ jobs:
           sudo apt-get install -y python3-tk python3-dev libx11-dev libxtst6
 
       - name: Install dependencies
+        working-directory: python
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Build executable
+        working-directory: python
         run: python build.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.release_name }}
-          path: dist/${{ matrix.artifact }}
+          path: python/dist/${{ matrix.artifact }}
 
   release:
     needs: build

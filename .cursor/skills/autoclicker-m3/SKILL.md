@@ -3,8 +3,8 @@ name: autoclicker-m3
 description: >-
   Domain knowledge for Auto Clicker M3 Pro (Python primary + C++ secondary).
   Explains architecture, double-click+hold trigger, ClickEngine anti-feedback,
-  UI controls, build/release, and constraints. Use when changing main.py,
-  cpp/main.cpp, build.py, click behavior, CPS, triggers, overlay, UI, or packaging.
+  UI controls, build/release, and constraints. Use when changing python/main.py,
+  cpp/main.cpp, python/build.py, click behavior, CPS, triggers, overlay, UI, or packaging.
 ---
 
 # Auto Clicker M3 Pro
@@ -19,14 +19,14 @@ Auto-clicker for Windows. Trigger is **double-click then hold** on an enabled mo
 
 ## Architecture
 
-Two implementations share the same product model:
+Two implementations at the same hierarchy level:
 
 | Path | Role |
 |------|------|
-| `main.py` | **Primary** — Python / CustomTkinter / pynput |
+| `python/main.py` | **Primary** — Python / CustomTkinter / pynput |
 | `cpp/main.cpp` | **Secondary** — C++ / Win32 / `WH_MOUSE_LL` + `SendInput` |
 
-### Python (`main.py`)
+### Python (`python/main.py`)
 
 | Class | Role |
 |-------|------|
@@ -51,7 +51,7 @@ Same roles in one translation unit: `ClickEngine` (LL hook + click thread), `Ove
 ## Stack
 
 - **Primary:** Python 3.12 (CI), `customtkinter` + `tkinter`, `pynput`
-  - Build: `python build.py` → `dist/AutoClickerM3.exe` (PyInstaller onefile, windowed)
+  - Build: `cd python && python build.py` → `python/dist/AutoClickerM3.exe` (PyInstaller onefile, windowed)
   - Release: `.github/workflows/release.yml` on tag `v*` or manual dispatch
 - **Secondary:** C++17, Win32 API (no third-party deps)
   - Build: `cmake -S cpp -B cpp/build -G "MinGW Makefiles"` then `cmake --build cpp/build`
@@ -63,4 +63,4 @@ Same roles in one translation unit: `ClickEngine` (LL hook + click thread), `Ove
 2. Preserve the double-click+hold model unless the user explicitly asks to change it.
 3. Keep Portuguese UI strings consistent with existing labels.
 4. After engine changes, mentally verify: activate (double-click+hold) → inject → physical release stops → simulated events ignored.
-5. If changing trigger/CPS/anti-feedback, update **both** `main.py` and `cpp/main.cpp` unless the user asks for only one.
+5. If changing trigger/CPS/anti-feedback, update **both** `python/main.py` and `cpp/main.cpp` unless the user asks for only one.

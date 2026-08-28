@@ -28,7 +28,7 @@ O comportamento central **não** é clicar por atalho de teclado nem em coordena
 | Empacotamento | PyInstaller (`--onefile`, `--windowed`) |
 | CI/CD | GitHub Actions → release com `.exe` |
 
-Dependências (`requirements.txt`): `pyinstaller`, `pynput`, `customtkinter`.
+Dependências (`python/requirements.txt`): `pyinstaller`, `pynput`, `customtkinter`.
 
 ### Secundária (C++)
 
@@ -47,27 +47,30 @@ Dependências (`requirements.txt`): `pyinstaller`, `pynput`, `customtkinter`.
 
 ```
 AutoClicker/
-├── main.py                         # Versão Python (primária)
-├── build.py                        # Script de build PyInstaller
-├── requirements.txt
+├── python/
+│   ├── main.py                     # Versão Python (primária)
+│   ├── build.py                    # Script de build PyInstaller
+│   └── requirements.txt
 ├── cpp/
 │   ├── main.cpp                    # Versão C++ (secundária)
 │   └── CMakeLists.txt
+├── assets/
 ├── .cursor/skills/autoclicker-m3/  # Skill do agente
 ├── .cursor/rules/                  # Rules do projeto
 ├── .github/workflows/release.yml
-├── dist/                           # Saída do build Python (não versionado)
-├── build/                          # Cache do PyInstaller (não versionado)
+├── python/dist/                    # Saída do build Python (não versionado)
+├── python/build/                   # Cache do PyInstaller (não versionado)
 └── cpp/build/                      # Cache CMake (não versionado)
 ```
 
-Classes em `main.py` / equivalentes em `cpp/main.cpp`:
+Classes em `python/main.py` / equivalentes em `cpp/main.cpp`:
 
 | Classe | Responsabilidade |
 |--------|------------------|
 | `ClickEngine` | Listener global do mouse, loop de cliques, cálculo de CPS real |
 | `OverlayWindow` | HUD flutuante com CPS em tempo real |
 | `AutoClickerApp` / `App` | Janela principal |
+
 
 ---
 
@@ -193,6 +196,7 @@ Tudo em memória. Hardcoded: tema Dark+blue, threshold 0.3 s, janela 500×750, o
 ### Python — desenvolvimento
 
 ```powershell
+cd python
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
@@ -202,8 +206,9 @@ python main.py
 ### Python — build
 
 ```powershell
+cd python
 python build.py
-# → dist/AutoClickerM3.exe
+# → python/dist/AutoClickerM3.exe
 ```
 
 Flags: `--onefile`, `--windowed`, `--name=AutoClickerM3`, `--collect-all=customtkinter`, `--noconfirm`.
@@ -218,7 +223,7 @@ cmake --build cpp/build
 
 ### Release (CI)
 
-`.github/workflows/release.yml` — tag `v*` ou `workflow_dispatch`; `windows-latest`, Python 3.12; publica o `.exe` **Python**. A versão C++ ainda não entra no release automatizado.
+`.github/workflows/release.yml` — tag `v*` ou `workflow_dispatch`; build a partir de `python/`; publica o `.exe` **Python**. A versão C++ ainda não entra no release automatizado.
 
 ---
 
