@@ -47,13 +47,18 @@ Dependências (`python/requirements.txt`): `pyinstaller`, `pynput`, `customtkint
 
 ```
 AutoClicker/
+├── run.bat / run.sh                # Atalho → python/run.*
 ├── python/
 │   ├── main.py                     # Versão Python (primária)
 │   ├── build.py                    # Script de build PyInstaller
-│   └── requirements.txt
+│   ├── requirements.txt
+│   ├── run.bat                     # Windows
+│   └── run.sh                      # Linux / macOS
 ├── cpp/
-│   ├── main.cpp                    # Versão C++ (secundária)
-│   └── CMakeLists.txt
+│   ├── main.cpp                    # Versão C++ (secundária, Win32)
+│   ├── CMakeLists.txt
+│   ├── run.bat                     # Windows (build + run)
+│   └── run.sh                      # Aviso fora do Windows / MSYS
 ├── assets/
 ├── .cursor/skills/autoclicker-m3/  # Skill do agente
 ├── .cursor/rules/                  # Rules do projeto
@@ -192,6 +197,15 @@ Tudo em memória. Hardcoded: tema Dark+blue, threshold 0.3 s, janela 500×750, o
 ---
 
 ## 9. Executar e compilar
+
+### Run scripts
+
+| Script | Plataforma | Comportamento |
+|--------|------------|---------------|
+| `run.bat` / `run.sh` (raiz) | Win / Linux / macOS | Encaminha para `python/run.*` |
+| `python/run.bat` / `python/run.sh` | Win / Linux / macOS | Roda `main.py` (usa `venv` se existir) |
+| `cpp/run.bat` | Windows | Compila se preciso e abre o `.exe` |
+| `cpp/run.sh` | Windows (MSYS/MinGW) | Idem; fora do Windows encerra com aviso |
 
 ### Python — desenvolvimento
 

@@ -24,9 +24,31 @@ Não usa atalhos de teclado nem coordenadas fixas: o gatilho é o próprio botã
 
 ```
 AutoClicker/
-├── python/   # versão primária (CustomTkinter + pynput)
-├── cpp/      # versão secundária (Win32)
+├── run.bat / run.sh   # atalho → versão Python
+├── python/            # versão primária (CustomTkinter + pynput)
+├── cpp/               # versão secundária (Win32)
 └── assets/
+```
+
+## Executar
+
+Na raiz (Python por padrão):
+
+```powershell
+.\run.bat          # Windows
+./run.sh           # Linux / macOS
+```
+
+Direto em cada versão:
+
+```powershell
+.\python\run.bat
+.\cpp\run.bat      # Windows; compila se o .exe nao existir
+```
+
+```bash
+./python/run.sh
+./cpp/run.sh       # so em ambiente Windows (MinGW/MSYS); Linux/macOS: use Python
 ```
 
 ## Python (primária)

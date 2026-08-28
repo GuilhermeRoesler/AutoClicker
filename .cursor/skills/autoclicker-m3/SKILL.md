@@ -56,6 +56,7 @@ Same roles in one translation unit: `ClickEngine` (LL hook + click thread), `Ove
 - **Secondary:** C++17, Win32 API (no third-party deps)
   - Build: `cmake -S cpp -B cpp/build -G "MinGW Makefiles"` then `cmake --build cpp/build`
   - Output: `cpp/build/bin/AutoClickerM3Cpp.exe`
+  - Run: root `run.bat` / `run.sh` → Python; `python/run.*` and `cpp/run.*` for each stack
 
 ## When editing
 
