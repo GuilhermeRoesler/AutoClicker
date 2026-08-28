@@ -77,7 +77,7 @@ jobs:
       - name: Build C++ (Release)
         run: cmake --build cpp/build --config Release
 
-      - name: Stage windows-optimized.exe
+      - name: Stage AutoClickerM3-windows-optimized.exe
         shell: pwsh
         run: |
           $exe = Get-ChildItem -Path cpp/build -Recurse -Filter AutoClickerM3Cpp.exe |
@@ -86,14 +86,14 @@ jobs:
             throw "AutoClickerM3Cpp.exe nao encontrado apos o build"
           }
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item -Force $exe.FullName dist/windows-optimized.exe
-          Write-Host "Artifact: $($exe.FullName) -> dist/windows-optimized.exe"
+          Copy-Item -Force $exe.FullName dist/AutoClickerM3-windows-optimized.exe
+          Write-Host "Artifact: $($exe.FullName) -> dist/AutoClickerM3-windows-optimized.exe"
 
       - name: Upload C++ artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-optimized.exe
-          path: dist/windows-optimized.exe
+          name: AutoClickerM3-windows-optimized.exe
+          path: dist/AutoClickerM3-windows-optimized.exe
 
   release:
     needs: [build, build-cpp]
@@ -125,7 +125,7 @@ jobs:
           cp release-files/AutoClickerM3-windows.exe/AutoClickerM3.exe dist/AutoClickerM3-windows.exe
           cp release-files/AutoClickerM3-linux/AutoClickerM3 dist/AutoClickerM3-linux
           cp release-files/AutoClickerM3-macos/AutoClickerM3 dist/AutoClickerM3-macos
-          cp release-files/windows-optimized.exe/windows-optimized.exe dist/windows-optimized.exe
+          cp release-files/AutoClickerM3-windows-optimized.exe/AutoClickerM3-windows-optimized.exe dist/AutoClickerM3-windows-optimized.exe
           chmod +x dist/AutoClickerM3-linux dist/AutoClickerM3-macos
 
       - name: Create GitHub Release
@@ -139,7 +139,7 @@ jobs:
             dist/AutoClickerM3-windows.exe
             dist/AutoClickerM3-linux
             dist/AutoClickerM3-macos
-            dist/windows-optimized.exe
+            dist/AutoClickerM3-windows-optimized.exe
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
