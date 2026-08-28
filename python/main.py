@@ -10,6 +10,20 @@ from pynput.mouse import Controller, Listener, Button
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
+
+def _side_button(index: int):
+    """Botão lateral: Windows usa x1/x2; Linux (Xorg) usa button8/button9."""
+    for name in (f"x{index}", f"button{7 + index}"):
+        btn = getattr(Button, name, None)
+        if btn is not None:
+            return btn
+    return None
+
+
+BUTTON_X1 = _side_button(1)
+BUTTON_X2 = _side_button(2)
+
+
 class ClickEngine:
     """Motor principal que gerencia os cliques e a leitura do mouse."""
     def __init__(self, update_callback):
@@ -26,9 +40,11 @@ class ClickEngine:
             Button.left: True,
             Button.right: False,
             Button.middle: False,
-            Button.x1: False,
-            Button.x2: False
         }
+        if BUTTON_X1 is not None:
+            self.active_triggers[BUTTON_X1] = False
+        if BUTTON_X2 is not None:
+            self.active_triggers[BUTTON_X2] = False
         
         # Estado do motor
         self.running = True
@@ -178,9 +194,11 @@ class AutoClickerApp(ctk.CTk):
             "Esquerdo": Button.left,
             "Direito": Button.right,
             "Meio": Button.middle,
-            "Lateral 1 (X1)": Button.x1,
-            "Lateral 2 (X2)": Button.x2
         }
+        if BUTTON_X1 is not None:
+            self.button_map["Lateral 1 (X1)"] = BUTTON_X1
+        if BUTTON_X2 is not None:
+            self.button_map["Lateral 2 (X2)"] = BUTTON_X2
         
         self.engine = ClickEngine(self.on_state_change)
         self.overlay = OverlayWindow(self)
