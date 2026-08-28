@@ -15,8 +15,22 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    runs-on: windows-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: AutoClickerM3.exe
+            release_name: AutoClickerM3-windows.exe
+          - os: ubuntu-latest
+            artifact: AutoClickerM3
+            release_name: AutoClickerM3-linux
+          - os: macos-latest
+            artifact: AutoClickerM3
+            release_name: AutoClickerM3-macos
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -27,6 +41,13 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk python3-dev
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -34,6 +55,25 @@ jobs:
 
       - name: Build executable
         run: python build.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.release_name }}
+          path: dist/${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-files
 
       - name: Resolve version
         id: version
@@ -45,6 +85,15 @@ jobs:
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp release-files/AutoClickerM3-windows.exe/AutoClickerM3.exe dist/AutoClickerM3-windows.exe
+          cp release-files/AutoClickerM3-linux/AutoClickerM3 dist/AutoClickerM3-linux
+          cp release-files/AutoClickerM3-macos/AutoClickerM3 dist/AutoClickerM3-macos
+          chmod +x dist/AutoClickerM3-linux dist/AutoClickerM3-macos
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -52,7 +101,10 @@ jobs:
           name: AutoClickerM3 ${{ steps.version.outputs.tag }}
           draft: false
           prerelease: false
-          files: dist/AutoClickerM3.exe
+          files: |
+            dist/AutoClickerM3-windows.exe
+            dist/AutoClickerM3-linux
+            dist/AutoClickerM3-macos
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
