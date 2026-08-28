@@ -16,6 +16,8 @@
 #include <windowsx.h>
 #include <gdiplus.h>
 
+#include "resource.h"
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -485,14 +487,21 @@ struct App {
         font_small = new Font(family, 12.f, FontStyleRegular, UnitPixel);
         font_status = new Font(family, 17.f, FontStyleBold, UnitPixel);
 
-        WNDCLASSW wc{};
+        WNDCLASSEXW wc{};
+        wc.cbSize = sizeof(wc);
         wc.lpfnWndProc = &App::WndProc;
         wc.hInstance = inst;
         wc.lpszClassName = L"ACM3Main";
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         wc.hbrBackground = nullptr;
         wc.style = CS_DBLCLKS;
-        RegisterClassW(&wc);
+        wc.hIcon = static_cast<HICON>(LoadImageW(
+            inst, MAKEINTRESOURCEW(IDI_APPICON), IMAGE_ICON,
+            GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), 0));
+        wc.hIconSm = static_cast<HICON>(LoadImageW(
+            inst, MAKEINTRESOURCEW(IDI_APPICON), IMAGE_ICON,
+            GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0));
+        RegisterClassExW(&wc);
 
         RECT wr{0, 0, kWinW, kWinH};
         AdjustWindowRectEx(&wr, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, FALSE, 0);
@@ -504,6 +513,11 @@ struct App {
             nullptr, nullptr, inst, this);
 
         if (!hwnd) return false;
+
+        if (wc.hIcon)
+            SendMessageW(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(wc.hIcon));
+        if (wc.hIconSm)
+            SendMessageW(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(wc.hIconSm));
 
         Layout();
         overlay.Create(inst);

@@ -55,7 +55,7 @@ Same roles in one translation unit: `ClickEngine` (LL hook + click thread), `Ove
   - Release: `.github/workflows/release.yml` on tag `v*` or manual dispatch
 - **Secondary:** C++17, Win32 + GDI+ (no third-party deps)
   - Build: `cmake -S cpp -B cpp/build` then `cmake --build cpp/build --config Release`
-  - Output: `cpp/build/bin/AutoClickerM3Cpp.exe`
+  - Output: `cpp/build/bin/AutoClickerM3Cpp.exe` (ícone embutido via `cpp/app.ico` + `app.rc`)
   - Run: root `run.bat` / `run.sh` → Python; `python/run.*` and `cpp/run.*` for each stack
   - Release CI: job `build-cpp` publica `windows-optimized.exe` junto dos artefatos Python
 
