@@ -54,10 +54,12 @@ Threads: pynput `Listener`, daemon `_click_loop`, Tk mainloop. UI updates from e
   - Build: `cmake -S cpp -B cpp/build` then `cmake --build cpp/build --config Release`
   - Output: `cpp/build/bin/AutoClickerM3Cpp.exe` (ícone embutido via `cpp/app.ico` + `app.rc`)
   - Run: root `run.bat` / `run.sh` → C++; `cpp/run.*` and `python/run.*` for each stack
-  - Release CI: job `build-cpp` publica `windows-optimized.exe` junto dos artefatos Python
+  - Release CI: job `build-cpp` publica `AutoClickerM3-windows-optimized-portable.exe` + `…-setup.exe` (Inno Setup)
 - **Secondary:** Python 3.12 (CI), `customtkinter` + `tkinter`, `pynput`
   - Build: `cd python && python build.py` → `python/dist/AutoClickerM3.exe` (PyInstaller onefile, windowed)
   - Release: `.github/workflows/release.yml` on tag `v*` or manual dispatch
+  - Windows artifacts: `AutoClickerM3-windows-portable.exe` + `AutoClickerM3-windows-setup.exe`
+  - Installers: `installer/python.iss` e `installer/cpp.iss` (Inno Setup 6 no CI via Chocolatey)
 
 ## When editing
 

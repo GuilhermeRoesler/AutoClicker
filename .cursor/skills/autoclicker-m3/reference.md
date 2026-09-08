@@ -59,6 +59,10 @@ AutoClicker/
 │   ├── requirements.txt
 │   ├── run.bat                     # Windows
 │   └── run.sh                      # Linux / macOS
+├── installer/
+│   ├── python.iss                  # Inno Setup → Windows Python setup.exe
+│   ├── cpp.iss                     # Inno Setup → Windows C++ setup.exe
+│   └── README.md
 ├── assets/
 ├── .cursor/skills/autoclicker-m3/  # Skill do agente
 ├── .cursor/rules/                  # Rules do projeto
@@ -243,10 +247,14 @@ Artefatos publicados:
 
 | Arquivo | Origem |
 |---------|--------|
-| `AutoClickerM3-windows.exe` | Python (Windows) |
+| `AutoClickerM3-windows-optimized-setup.exe` | C++ — Inno Setup |
+| `AutoClickerM3-windows-optimized-portable.exe` | C++ — executável portátil |
+| `AutoClickerM3-windows-setup.exe` | Python — Inno Setup |
+| `AutoClickerM3-windows-portable.exe` | Python — executável portátil |
 | `AutoClickerM3-linux` | Python (Linux) |
 | `AutoClickerM3-macos` | Python (macOS) |
-| `windows-optimized.exe` | C++ / Win32+GDI+ (Windows) |
+
+Scripts em `installer/*.iss`. O instalador usa `PrivilegesRequired=lowest` (instalação por usuário) com opção de elevar; cria atalho no menu Iniciar e opcionalmente na área de trabalho.
 
 ---
 

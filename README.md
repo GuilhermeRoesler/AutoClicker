@@ -27,6 +27,7 @@ AutoClicker/
 ├── run.bat / run.sh   # atalho → versão C++
 ├── cpp/               # versão primária (Win32)
 ├── python/            # versão secundária (CustomTkinter + pynput)
+├── installer/         # scripts Inno Setup (setup.exe Windows)
 ├── docs/screenshots/  # imagens do README
 └── assets/
 ```
@@ -62,7 +63,16 @@ cmake --build cpp/build
 .\cpp\build\bin\AutoClickerM3Cpp.exe
 ```
 
-Releases prontas também estão disponíveis na [página de Releases](https://github.com/GuilhermeRoesler/AutoClicker/releases) do GitHub — incluindo `windows-optimized.exe` (build C++ nativo).
+Releases prontas na [página de Releases](https://github.com/GuilhermeRoesler/AutoClicker/releases):
+
+| Arquivo | Tipo |
+|---------|------|
+| `AutoClickerM3-windows-optimized-setup.exe` | Instalador C++ (recomendado) |
+| `AutoClickerM3-windows-optimized-portable.exe` | Portátil C++ |
+| `AutoClickerM3-windows-setup.exe` | Instalador Python |
+| `AutoClickerM3-windows-portable.exe` | Portátil Python |
+
+O instalador (Inno Setup) cria atalhos e entrada de desinstalação; o portátil é só o `.exe`.
 
 ## Python (secundária)
 
@@ -84,7 +94,19 @@ cd python
 python build.py
 ```
 
-O arquivo sai em `python/dist/AutoClickerM3.exe`.
+O arquivo sai em `python/dist/AutoClickerM3.exe` (base do portátil / instalador Windows).
+
+### Instalador Windows (Inno Setup)
+
+Com [Inno Setup 6](https://jrsoftware.org/isinfo.php) instalado e o `.exe` já gerado:
+
+```powershell
+mkdir dist\staging-python -Force
+copy python\dist\AutoClickerM3.exe dist\staging-python\AutoClickerM3.exe
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\python.iss /DMyAppVersion=1.0.0
+```
+
+Para o C++, use `dist\staging-cpp\AutoClickerM3.exe` e `installer\cpp.iss`. Detalhes em `installer/README.md`.
 
 ## Stack
 

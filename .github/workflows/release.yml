@@ -22,19 +22,38 @@ jobs:
         include:
           - os: windows-latest
             artifact: AutoClickerM3.exe
-            release_name: AutoClickerM3-windows.exe
+            portable_name: AutoClickerM3-windows-portable.exe
+            setup_name: AutoClickerM3-windows-setup.exe
+            iss: installer/python.iss
           - os: ubuntu-latest
             artifact: AutoClickerM3
-            release_name: AutoClickerM3-linux
+            portable_name: AutoClickerM3-linux
+            setup_name: ""
+            iss: ""
           - os: macos-latest
             artifact: AutoClickerM3
-            release_name: AutoClickerM3-macos
+            portable_name: AutoClickerM3-macos
+            setup_name: ""
+            iss: ""
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.version }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          VER="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "semver=$VER" >> "$GITHUB_OUTPUT"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -58,11 +77,49 @@ jobs:
         working-directory: python
         run: python build.py
 
-      - name: Upload artifact
+      - name: Stage portable artifact
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp "python/dist/${{ matrix.artifact }}" "dist/${{ matrix.portable_name }}"
+            mkdir -p dist/staging-python
+            cp "python/dist/${{ matrix.artifact }}" dist/staging-python/AutoClickerM3.exe
+          else
+            cp "python/dist/${{ matrix.artifact }}" "dist/${{ matrix.portable_name }}"
+            chmod +x "dist/${{ matrix.portable_name }}"
+          fi
+
+      - name: Install Inno Setup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build Windows setup (Inno Setup)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            throw "ISCC.exe nao encontrado em $iscc"
+          }
+          & $iscc "${{ matrix.iss }}" "/DMyAppVersion=${{ steps.version.outputs.semver }}"
+          if (-not (Test-Path "dist/${{ matrix.setup_name }}")) {
+            throw "Setup nao gerado: dist/${{ matrix.setup_name }}"
+          }
+
+      - name: Upload portable artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.release_name }}
-          path: python/dist/${{ matrix.artifact }}
+          name: ${{ matrix.portable_name }}
+          path: dist/${{ matrix.portable_name }}
+
+      - name: Upload setup artifact
+        if: matrix.setup_name != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.setup_name }}
+          path: dist/${{ matrix.setup_name }}
 
   build-cpp:
     runs-on: windows-latest
@@ -71,13 +128,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.version }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          VER="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "semver=$VER" >> "$GITHUB_OUTPUT"
+
       - name: Configure CMake
         run: cmake -S cpp -B cpp/build -A x64
 
       - name: Build C++ (Release)
         run: cmake --build cpp/build --config Release
 
-      - name: Stage AutoClickerM3-windows-optimized.exe
+      - name: Stage portable + installer source
         shell: pwsh
         run: |
           $exe = Get-ChildItem -Path cpp/build -Recurse -Filter AutoClickerM3Cpp.exe |
@@ -86,14 +156,38 @@ jobs:
             throw "AutoClickerM3Cpp.exe nao encontrado apos o build"
           }
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item -Force $exe.FullName dist/AutoClickerM3-windows-optimized.exe
-          Write-Host "Artifact: $($exe.FullName) -> dist/AutoClickerM3-windows-optimized.exe"
+          New-Item -ItemType Directory -Force -Path dist/staging-cpp | Out-Null
+          Copy-Item -Force $exe.FullName dist/AutoClickerM3-windows-optimized-portable.exe
+          Copy-Item -Force $exe.FullName dist/staging-cpp/AutoClickerM3.exe
+          Write-Host "Portable: $($exe.FullName) -> dist/AutoClickerM3-windows-optimized-portable.exe"
 
-      - name: Upload C++ artifact
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build Windows setup (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            throw "ISCC.exe nao encontrado em $iscc"
+          }
+          & $iscc installer\cpp.iss "/DMyAppVersion=${{ steps.version.outputs.semver }}"
+          if (-not (Test-Path "dist/AutoClickerM3-windows-optimized-setup.exe")) {
+            throw "Setup nao gerado: dist/AutoClickerM3-windows-optimized-setup.exe"
+          }
+
+      - name: Upload C++ portable artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AutoClickerM3-windows-optimized.exe
-          path: dist/AutoClickerM3-windows-optimized.exe
+          name: AutoClickerM3-windows-optimized-portable.exe
+          path: dist/AutoClickerM3-windows-optimized-portable.exe
+
+      - name: Upload C++ setup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoClickerM3-windows-optimized-setup.exe
+          path: dist/AutoClickerM3-windows-optimized-setup.exe
 
   release:
     needs: [build, build-cpp]
@@ -122,24 +216,42 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          cp release-files/AutoClickerM3-windows.exe/AutoClickerM3.exe dist/AutoClickerM3-windows.exe
-          cp release-files/AutoClickerM3-linux/AutoClickerM3 dist/AutoClickerM3-linux
-          cp release-files/AutoClickerM3-macos/AutoClickerM3 dist/AutoClickerM3-macos
-          cp release-files/AutoClickerM3-windows-optimized.exe/AutoClickerM3-windows-optimized.exe dist/AutoClickerM3-windows-optimized.exe
+          cp release-files/AutoClickerM3-windows-portable.exe/AutoClickerM3-windows-portable.exe dist/
+          cp release-files/AutoClickerM3-windows-setup.exe/AutoClickerM3-windows-setup.exe dist/
+          cp release-files/AutoClickerM3-linux/AutoClickerM3-linux dist/
+          cp release-files/AutoClickerM3-macos/AutoClickerM3-macos dist/
+          cp release-files/AutoClickerM3-windows-optimized-portable.exe/AutoClickerM3-windows-optimized-portable.exe dist/
+          cp release-files/AutoClickerM3-windows-optimized-setup.exe/AutoClickerM3-windows-optimized-setup.exe dist/
           chmod +x dist/AutoClickerM3-linux dist/AutoClickerM3-macos
+          ls -la dist/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: AutoClickerM3 ${{ steps.version.outputs.tag }}
+          name: Auto Clicker M3 ${{ steps.version.outputs.tag }}
           draft: false
           prerelease: false
+          body: |
+            ## Downloads
+
+            ### Windows — C++ (recomendado)
+            - `AutoClickerM3-windows-optimized-setup.exe` — instalador (atalhos, desinstalação)
+            - `AutoClickerM3-windows-optimized-portable.exe` — executável portátil
+
+            ### Windows — Python
+            - `AutoClickerM3-windows-setup.exe` — instalador
+            - `AutoClickerM3-windows-portable.exe` — executável portátil
+
+            ### Outros
+            - `AutoClickerM3-linux` / `AutoClickerM3-macos` — builds Python portáteis
           files: |
-            dist/AutoClickerM3-windows.exe
+            dist/AutoClickerM3-windows-optimized-setup.exe
+            dist/AutoClickerM3-windows-optimized-portable.exe
+            dist/AutoClickerM3-windows-setup.exe
+            dist/AutoClickerM3-windows-portable.exe
             dist/AutoClickerM3-linux
             dist/AutoClickerM3-macos
-            dist/AutoClickerM3-windows-optimized.exe
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
