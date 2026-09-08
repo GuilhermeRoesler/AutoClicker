@@ -2,7 +2,7 @@
 
 Auto-clicker para Windows com interface escura estilo Material Design 3.
 
-![Auto Clicker M3 Pro](assets/demo.png)
+![Auto Clicker M3 Pro](docs/screenshots/demo.webp)
 
 ## Como funciona
 
@@ -27,6 +27,7 @@ AutoClicker/
 ├── run.bat / run.sh   # atalho → versão C++
 ├── cpp/               # versão primária (Win32)
 ├── python/            # versão secundária (CustomTkinter + pynput)
+├── docs/screenshots/  # imagens do README
 └── assets/
 ```
 
