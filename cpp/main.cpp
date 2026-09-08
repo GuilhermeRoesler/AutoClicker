@@ -1,5 +1,5 @@
 /**
- * Auto Clicker M3 Pro — versão C++ (secundária)
+ * Auto Clicker M3 Pro — versão C++ (primária)
  *
  * UI: Win32 + GDI+ (tema escuro estilo M3), sem Qt/WebView2.
  * Motor: mesmo modelo do python/main.py (duplo-clique + hold + anti-feedback).

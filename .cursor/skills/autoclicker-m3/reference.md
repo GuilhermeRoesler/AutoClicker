@@ -18,7 +18,18 @@ O comportamento central **não** é clicar por atalho de teclado nem em coordena
 
 ## 2. Stack tecnológica
 
-### Primária (Python)
+### Primária (C++)
+
+| Item | Detalhe |
+|------|---------|
+| Linguagem | C++17 |
+| Interface | Win32 + GDI+ (tema escuro custom, cards/switches/slider) |
+| Mouse (leitura) | `SetWindowsHookEx(WH_MOUSE_LL)` |
+| Mouse (injeção) | `SendInput` |
+| Build | CMake → `AutoClickerM3Cpp.exe` |
+| Dependências | Nenhuma de terceiros (só libs do Windows) |
+
+### Secundária (Python)
 
 | Item | Detalhe |
 |------|---------|
@@ -30,35 +41,24 @@ O comportamento central **não** é clicar por atalho de teclado nem em coordena
 
 Dependências (`python/requirements.txt`): `pyinstaller`, `pynput`, `customtkinter`.
 
-### Secundária (C++)
-
-| Item | Detalhe |
-|------|---------|
-| Linguagem | C++17 |
-| Interface | Win32 + GDI+ (tema escuro custom, cards/switches/slider) |
-| Mouse (leitura) | `SetWindowsHookEx(WH_MOUSE_LL)` |
-| Mouse (injeção) | `SendInput` |
-| Build | CMake → `AutoClickerM3Cpp.exe` |
-| Dependências | Nenhuma de terceiros (só libs do Windows) |
-
 ---
 
 ## 3. Estrutura do repositório
 
 ```
 AutoClicker/
-├── run.bat / run.sh                # Atalho → python/run.*
+├── run.bat / run.sh                # Atalho → cpp/run.*
+├── cpp/
+│   ├── main.cpp                    # Versão C++ (primária, Win32)
+│   ├── CMakeLists.txt
+│   ├── run.bat                     # Windows (build + run)
+│   └── run.sh                      # Aviso fora do Windows / MSYS
 ├── python/
-│   ├── main.py                     # Versão Python (primária)
+│   ├── main.py                     # Versão Python (secundária)
 │   ├── build.py                    # Script de build PyInstaller
 │   ├── requirements.txt
 │   ├── run.bat                     # Windows
 │   └── run.sh                      # Linux / macOS
-├── cpp/
-│   ├── main.cpp                    # Versão C++ (secundária, Win32)
-│   ├── CMakeLists.txt
-│   ├── run.bat                     # Windows (build + run)
-│   └── run.sh                      # Aviso fora do Windows / MSYS
 ├── assets/
 ├── .cursor/skills/autoclicker-m3/  # Skill do agente
 ├── .cursor/rules/                  # Rules do projeto
@@ -202,10 +202,10 @@ Tudo em memória. Hardcoded: tema Dark+blue, threshold 0.3 s, janela 500×750, o
 
 | Script | Plataforma | Comportamento |
 |--------|------------|---------------|
-| `run.bat` / `run.sh` (raiz) | Win / Linux / macOS | Encaminha para `python/run.*` |
-| `python/run.bat` / `python/run.sh` | Win / Linux / macOS | Roda `main.py` (usa `venv` se existir) |
+| `run.bat` / `run.sh` (raiz) | Win (padrão) | Encaminha para `cpp/run.*` |
 | `cpp/run.bat` | Windows | Compila se preciso e abre o `.exe` |
 | `cpp/run.sh` | Windows (MSYS/MinGW) | Idem; fora do Windows encerra com aviso |
+| `python/run.bat` / `python/run.sh` | Win / Linux / macOS | Roda `main.py` (usa `venv` se existir) |
 
 ### Python — desenvolvimento
 

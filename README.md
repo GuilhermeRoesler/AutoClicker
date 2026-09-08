@@ -24,34 +24,46 @@ Não usa atalhos de teclado nem coordenadas fixas: o gatilho é o próprio botã
 
 ```
 AutoClicker/
-├── run.bat / run.sh   # atalho → versão Python
-├── python/            # versão primária (CustomTkinter + pynput)
-├── cpp/               # versão secundária (Win32)
+├── run.bat / run.sh   # atalho → versão C++
+├── cpp/               # versão primária (Win32)
+├── python/            # versão secundária (CustomTkinter + pynput)
 └── assets/
 ```
 
 ## Executar
 
-Na raiz (Python por padrão):
+Na raiz (C++ por padrão, Windows):
 
 ```powershell
 .\run.bat          # Windows
-./run.sh           # Linux / macOS
+./run.sh           # Windows (MinGW/MSYS); Linux/macOS: use Python
 ```
 
 Direto em cada versão:
 
 ```powershell
-.\python\run.bat
 .\cpp\run.bat      # Windows; compila se o .exe nao existir
+.\python\run.bat
 ```
 
 ```bash
-./python/run.sh
-./cpp/run.sh       # so em ambiente Windows (MinGW/MSYS); Linux/macOS: use Python
+./cpp/run.sh       # so em ambiente Windows (MinGW/MSYS)
+./python/run.sh    # Linux / macOS / Windows
 ```
 
-## Python (primária)
+## C++ (primária)
+
+Win32, sem dependências externas — mesmo modelo de duplo-clique + hold.
+
+```powershell
+cmake -S cpp -B cpp/build -G "MinGW Makefiles"
+cmake --build cpp/build
+.\cpp\build\bin\AutoClickerM3Cpp.exe
+```
+
+Releases prontas também estão disponíveis na [página de Releases](https://github.com/GuilhermeRoesler/AutoClicker/releases) do GitHub — incluindo `windows-optimized.exe` (build C++ nativo).
+
+## Python (secundária)
 
 Requisitos: Windows · Python 3.12+
 
@@ -73,22 +85,10 @@ python build.py
 
 O arquivo sai em `python/dist/AutoClickerM3.exe`.
 
-Releases prontas também estão disponíveis na [página de Releases](https://github.com/GuilhermeRoesler/AutoClicker/releases) do GitHub — incluindo `windows-optimized.exe` (build C++ nativo).
-
-## C++ (secundária)
-
-Win32, sem dependências externas — mesmo modelo de duplo-clique + hold.
-
-```powershell
-cmake -S cpp -B cpp/build -G "MinGW Makefiles"
-cmake --build cpp/build
-.\cpp\build\bin\AutoClickerM3Cpp.exe
-```
-
 ## Stack
 
-- **Primária:** Python · CustomTkinter · pynput · PyInstaller
-- **Secundária:** C++17 · Win32 + GDI+ · CMake
+- **Primária:** C++17 · Win32 + GDI+ · CMake
+- **Secundária:** Python · CustomTkinter · pynput · PyInstaller
 
 ## Licença
 

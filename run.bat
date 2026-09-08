@@ -1,4 +1,4 @@
 @echo off
-REM Roteia para a versao Python (padrao).
-call "%~dp0python\run.bat" %*
+REM Roteia para a versao C++ (padrao).
+call "%~dp0cpp\run.bat" %*
 exit /b %ERRORLEVEL%

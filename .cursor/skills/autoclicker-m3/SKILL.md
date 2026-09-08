@@ -1,7 +1,7 @@
 ---
 name: autoclicker-m3
 description: >-
-  Domain knowledge for Auto Clicker M3 Pro (Python primary + C++ secondary).
+  Domain knowledge for Auto Clicker M3 Pro (C++ primary + Python secondary).
   Explains architecture, double-click+hold trigger, ClickEngine anti-feedback,
   UI controls, build/release, and constraints. Use when changing python/main.py,
   cpp/main.cpp, python/build.py, click behavior, CPS, triggers, overlay, UI, or packaging.
@@ -23,8 +23,12 @@ Two implementations at the same hierarchy level:
 
 | Path | Role |
 |------|------|
-| `python/main.py` | **Primary** — Python / CustomTkinter / pynput |
-| `cpp/main.cpp` | **Secondary** — C++ / Win32+GDI+ / `WH_MOUSE_LL` + `SendInput` |
+| `cpp/main.cpp` | **Primary** — C++ / Win32+GDI+ / `WH_MOUSE_LL` + `SendInput` |
+| `python/main.py` | **Secondary** — Python / CustomTkinter / pynput |
+
+### C++ (`cpp/main.cpp`)
+
+Same roles in one translation unit: `ClickEngine` (LL hook + click thread), `OverlayWindow`, custom GDI+ `App` UI (rounded cards, switches, slider). Status updates via `PostMessage(WM_APP+1)`.
 
 ### Python (`python/main.py`)
 
@@ -36,10 +40,6 @@ Two implementations at the same hierarchy level:
 
 Threads: pynput `Listener`, daemon `_click_loop`, Tk mainloop. UI updates from engine use `self.after(0, ...)`.
 
-### C++ (`cpp/main.cpp`)
-
-Same roles in one translation unit: `ClickEngine` (LL hook + click thread), `OverlayWindow`, custom GDI+ `App` UI (rounded cards, switches, slider). Status updates via `PostMessage(WM_APP+1)`.
-
 ## Invariants (do not break)
 
 - Simulated press/release must set `ignore_next_press` / `ignore_next_release` **before** injection so the listener does not treat script clicks as user input.
@@ -50,14 +50,14 @@ Same roles in one translation unit: `ClickEngine` (LL hook + click thread), `Ove
 
 ## Stack
 
-- **Primary:** Python 3.12 (CI), `customtkinter` + `tkinter`, `pynput`
-  - Build: `cd python && python build.py` → `python/dist/AutoClickerM3.exe` (PyInstaller onefile, windowed)
-  - Release: `.github/workflows/release.yml` on tag `v*` or manual dispatch
-- **Secondary:** C++17, Win32 + GDI+ (no third-party deps)
+- **Primary:** C++17, Win32 + GDI+ (no third-party deps)
   - Build: `cmake -S cpp -B cpp/build` then `cmake --build cpp/build --config Release`
   - Output: `cpp/build/bin/AutoClickerM3Cpp.exe` (ícone embutido via `cpp/app.ico` + `app.rc`)
-  - Run: root `run.bat` / `run.sh` → Python; `python/run.*` and `cpp/run.*` for each stack
+  - Run: root `run.bat` / `run.sh` → C++; `cpp/run.*` and `python/run.*` for each stack
   - Release CI: job `build-cpp` publica `windows-optimized.exe` junto dos artefatos Python
+- **Secondary:** Python 3.12 (CI), `customtkinter` + `tkinter`, `pynput`
+  - Build: `cd python && python build.py` → `python/dist/AutoClickerM3.exe` (PyInstaller onefile, windowed)
+  - Release: `.github/workflows/release.yml` on tag `v*` or manual dispatch
 
 ## When editing
 
